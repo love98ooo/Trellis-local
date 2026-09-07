@@ -18,7 +18,7 @@ git status
 
 ## Step 2: Read Task Artifacts and Applicable Specs
 
-Read the current task artifacts in order:
+Read existing task artifacts when available; otherwise use the dispatched scope and acceptance criteria:
 
 - `prd.md`
 - `design.md` if present
@@ -106,6 +106,6 @@ Skip this step if your change is confined to a single layer.
 Report every violation you find. Then:
 
 - Mechanical and local (lint nit, missing type, wrong import, dead branch, failing assertion) → fix in place, then re-run project checks.
-- Design or judgment (naming a shared concept, moving a module boundary, changing a public interface, reassigning where behavior lives) → record the evidence and your recommendation, and stop. Do not rewrite it silently.
+- Design or judgment → inspect evidence and apply fixes within the authorized scope; follow `.trellis/workflow.md` for decisions requiring approval.
 
-If a fix would touch files outside the current task's scope, say so and stop instead of widening the change.
+If a fix expands the authorized scope materially, obtain the missing decision while continuing independent in-scope work.

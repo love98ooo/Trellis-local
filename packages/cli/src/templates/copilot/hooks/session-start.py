@@ -124,29 +124,6 @@ def configure_project_encoding(project_dir: Path) -> None:
         pass  # Optional encoding helper; host defaults are still usable.
 
 
-def _has_curated_jsonl_entry(jsonl_path: Path) -> bool:
-    """Return True iff jsonl has at least one row with a ``file`` field.
-
-    A newly created jsonl is empty, and older tasks may still carry a
-    ``{"_example": ...}`` placeholder row (no ``file`` key) — neither is
-    "ready". Readiness requires at least one curated entry. Matches the
-    contract used by ``inject-subagent-context.py``.
-    """
-    try:
-        for line in jsonl_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict) and row.get("file"):
-                return True
-    except (OSError, UnicodeDecodeError):
-        return False
-    return False
-
 
 def read_file(path: Path, fallback: str = "") -> str:
     try:
@@ -227,73 +204,29 @@ def _resolve_task_dir(trellis_dir: Path, task_ref: str) -> Path:
 
 
 def _get_task_status(trellis_dir: Path, hook_input: dict) -> str:
+    """Report task facts; workflow.md owns all planning and approval rules."""
     active = _resolve_active_task(trellis_dir, hook_input)
     if not active.task_path:
-        return (
-            "Status: NO ACTIVE TASK\n"
-            "Next: Classify the current turn and ask for task-creation consent "
-            "before creating any Trellis task."
-        )
-
+        return "Status: NO ACTIVE TASK\nNext: Follow .trellis/workflow.md."
     task_ref = active.task_path
     task_dir = _resolve_task_dir(trellis_dir, task_ref)
     if active.stale or not task_dir.is_dir():
-        return (
-            f"Status: STALE POINTER\nTask: {task_ref}\n"
-            "Next: Task directory not found. Run: python3 ./.trellis/scripts/task.py finish"
-        )
-
-    task_json_path = task_dir / "task.json"
-    task_data: dict = {}
-    if task_json_path.is_file():
-        try:
-            task_data = json.loads(task_json_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, PermissionError):
-            pass  # Optional task metadata; fall back to generic status.
-
-    task_title = task_data.get("title", task_ref)
-    task_status = task_data.get("status", "unknown")
-
-    if task_status == "completed":
-        return (
-            f"Status: COMPLETED\nTask: {task_title}\n"
-            f"Next: Archive with `python3 ./.trellis/scripts/task.py archive {task_dir.name}` "
-            "or start a new task."
-        )
-
-    has_prd = (task_dir / "prd.md").is_file()
-    has_design = (task_dir / "design.md").is_file()
-    has_implement = (task_dir / "implement.md").is_file()
+        return f"Status: STALE POINTER\nTask: {task_ref}\nNext: Inspect the session pointer."
+    try:
+        task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        task_data = {}
+    if not isinstance(task_data, dict):
+        task_data = {}
+    title = task_data.get("title") or task_ref
+    status = str(task_data.get("status") or "unknown").upper()
     present = [
-        name
-        for name in ("prd.md", "design.md", "implement.md", "implement.jsonl", "check.jsonl")
+        name for name in ("prd.md", "design.md", "implement.md", "implement.jsonl", "check.jsonl")
         if (task_dir / name).is_file()
     ]
-    present_line = ", ".join(present) if present else "none"
-
-    if not has_prd:
-        return (
-            f"Status: PLANNING\nTask: {task_title}\nPresent: {present_line}\n"
-            "Next: Load trellis-brainstorm and write prd.md. Stay in planning."
-        )
-
-    if task_status == "planning":
-        if has_design and has_implement:
-            next_action = "Review planning artifacts with the user before `task.py start`."
-        else:
-            next_action = (
-                "Lightweight task can ask for start review with PRD-only; "
-                "complex task must add design.md and implement.md before `task.py start`."
-            )
-        return (
-            f"Status: PLANNING\nTask: {task_title}\nPresent: {present_line}\n"
-            f"Next: {next_action}"
-        )
-
     return (
-        f"Status: {task_status.upper()}\nTask: {task_title}\nPresent: {present_line}\n"
-        "Next: Follow the matching per-turn workflow-state. Context order is jsonl entries, "
-        "prd.md, design.md if present, implement.md if present."
+        f"Status: {status}\nTask: {title}\nPresent: {', '.join(present) or '(none)'}\n"
+        "Next: Follow .trellis/workflow.md and the matching workflow-state."
     )
 
 
@@ -368,17 +301,14 @@ def _build_compact_current_state(
     lines: list[str] = []
 
     try:
-        from common.paths import get_active_journal_file, get_developer, get_tasks_dir, count_lines  # type: ignore[import-not-found]
+        from common.paths import get_active_journal_file, get_tasks_dir, count_lines  # type: ignore[import-not-found]
         from common.tasks import iter_active_tasks  # type: ignore[import-not-found]
     except Exception:
         get_active_journal_file = None  # type: ignore[assignment]
-        get_developer = None  # type: ignore[assignment]
         get_tasks_dir = None  # type: ignore[assignment]
         count_lines = None  # type: ignore[assignment]
         iter_active_tasks = None  # type: ignore[assignment]
 
-    developer = get_developer(repo_root) if get_developer else None
-    lines.append(f"Developer: {developer or '(not initialized)'}")
     lines.append(_format_git_state(repo_root))
 
     active = _resolve_active_task(trellis_dir, hook_input)
@@ -401,7 +331,7 @@ def _build_compact_current_state(
         try:
             task_count = sum(1 for _ in iter_active_tasks(get_tasks_dir(repo_root)))
             lines.append(
-                f"Active tasks: {task_count} total. Use `python3 ./.trellis/scripts/task.py list --mine` only if needed."
+                f"Active tasks: {task_count} total. Use `python3 ./.trellis/scripts/task.py list` only if needed."
             )
         except Exception:
             pass  # Optional task summary; keep compact state available.

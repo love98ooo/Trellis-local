@@ -1,6 +1,6 @@
-# `trellis mem` CLI Reference
+# `trellis-local mem` CLI Reference
 
-Full flag reference for the five subcommands. Pin this as the authoritative source — `trellis mem help` prints the same content at runtime, so anything here that drifts is a bug.
+Full flag reference for the five subcommands. Pin this as the authoritative source — `trellis-local mem help` prints the same content at runtime, so anything here that drifts is a bug.
 
 ## Subcommands
 
@@ -34,18 +34,18 @@ Full flag reference for the five subcommands. Pin this as the authoritative sour
 
 ```bash
 # What past sessions discussed "deadlock" anywhere on this machine?
-trellis mem search "deadlock" --global --limit 20
+trellis-local mem search "deadlock" --global --limit 20
 
 # Inside a specific session, surface the top 5 turns that mention "lock contention"
 # plus 2 turns of surrounding context.
-trellis mem context 5842592d --grep "lock contention" --turns 5 --around 2
+trellis-local mem context 5842592d --grep "lock contention" --turns 5 --around 2
 
 # Recover the brainstorm window for a session — useful when continuing a task
 # the user started a week ago.
-trellis mem extract 5842592d --phase brainstorm
+trellis-local mem extract 5842592d --phase brainstorm
 
 # List every project this machine has Trellis sessions for, with counts.
-trellis mem projects
+trellis-local mem projects
 ```
 
 ## Output shapes
@@ -62,4 +62,4 @@ trellis mem projects
 
 ## When you need more than this reference
 
-Run `trellis mem help` in the user's shell. The runtime help is authoritative and will be ahead of this reference during fast-moving beta releases.
+Run `trellis-local mem help` in the user's shell. The runtime help is authoritative and will be ahead of this reference during fast-moving beta releases.

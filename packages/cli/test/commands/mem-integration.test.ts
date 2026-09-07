@@ -667,7 +667,7 @@ describe("runMem subcommand integration", () => {
   it("help command prints usage", () => {
     runMem(["help"]);
     const joined = logs.join("\n");
-    expect(joined).toContain("trellis mem");
+    expect(joined).toContain("trellis-local mem");
     expect(joined).toContain("claude|codex|grok|opencode|pi|zcode|all");
   });
 

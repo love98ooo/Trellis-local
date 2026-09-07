@@ -4,7 +4,7 @@
 Task Management Script.
 
 Usage:
-    python3 task.py create "<title>" --description "<desc>" [--slug <name>] [--assignee <dev>] [--priority P0|P1|P2|P3] [--parent <dir>] [--package <pkg>] [--no-start] [--force]
+    python3 task.py create "<title>" --description "<desc>" [--slug <name>] [--priority P0|P1|P2|P3] [--parent <dir>] [--package <pkg>] [--no-start] [--force]
     python3 task.py add-context <dir> <file> <path> [reason] # Add jsonl entry
     python3 task.py validate <dir>              # Validate jsonl files
     python3 task.py list-context <dir>          # List jsonl entries
@@ -16,6 +16,7 @@ Usage:
     python3 task.py set-scope <dir> <scope>     # Set scope for PR title
     python3 task.py set-meta <dir> <key> <value>  # Set a task metadata key
     python3 task.py rename <dir> <new-slug> [--dry-run]  # Rename task + references
+    python3 task.py complete <task-dir> --reason "Acceptance checks passed"
     python3 task.py archive <task-dir> [--skip-branch-validation]  # Archive completed task
     python3 task.py list                        # List active tasks
     python3 task.py list-archive [month]        # List archived tasks
@@ -32,12 +33,10 @@ from pathlib import Path
 
 from common.log import Colors, colored
 from common.paths import (
-    DEVELOPER_HINT,
     DIR_WORKFLOW,
     DIR_TASKS,
     FILE_TASK_JSON,
     get_repo_root,
-    get_developer,
     get_tasks_dir,
     get_current_task,
 )
@@ -61,6 +60,7 @@ from common.task_store import (
     cmd_create,
     cmd_rename,
     cmd_archive,
+    cmd_complete,
     cmd_set_branch,
     cmd_set_base_branch,
     cmd_set_scope,
@@ -72,7 +72,6 @@ from common.task_context import (
     cmd_add_context,
     cmd_validate,
     cmd_list_context,
-    curated_entry_count,
 )
 
 
@@ -190,29 +189,6 @@ def cmd_start(args: argparse.Namespace) -> int:
         print(colored(f"Error: Task not found: {task_input}", Colors.RED))
         print("Hint: Use task name (e.g., 'my-task') or full path (e.g., '.trellis/tasks/01-31-my-task')")
         return 1
-
-    # Context-manifest gate (#573): a seeded-but-uncurated implement/check
-    # manifest means every sub-agent dispatched for this task runs with zero
-    # spec context, and nothing downstream surfaces that to the main session.
-    # An absent manifest is not gated — create seeds the files only on
-    # sub-agent-capable platforms, so absence means no sub-agent reads them.
-    if not getattr(args, "allow_empty_context", False):
-        empty_manifests = [
-            name
-            for name in ("implement.jsonl", "check.jsonl")
-            if curated_entry_count(full_path / name) == 0
-        ]
-        if empty_manifests:
-            print(colored(
-                f"Error: {' and '.join(empty_manifests)} "
-                f"{'has' if len(empty_manifests) == 1 else 'have'} no curated entries",
-                Colors.RED,
-            ))
-            print("Sub-agents (implement/check) would run with zero spec context.")
-            print(f"  Curate:  python3 .trellis/scripts/task.py add-context {task_input} implement <path> \"<why>\"")
-            print(f"  Verify:  python3 .trellis/scripts/task.py validate {task_input}")
-            print("  Intentionally empty? Re-run start with --allow-empty-context")
-            return 1
 
     # Convert to relative path for storage. repo_root is resolved because
     # full_path already is (resolve_task_dir only returns paths inside the
@@ -376,8 +352,6 @@ def cmd_list(args: argparse.Namespace) -> int:
     repo_root = get_repo_root()
     tasks_dir = get_tasks_dir(repo_root)
     current_task = get_current_task(repo_root)
-    developer = get_developer(repo_root)
-    filter_mine = args.mine
     filter_status = args.status
     as_json = getattr(args, "json", False)
 
@@ -386,18 +360,9 @@ def cmd_list(args: argparse.Namespace) -> int:
     all_statuses = {name: t.status for name, t in all_tasks.items()}
 
     if as_json:
-        if filter_mine and not developer:
-            print(
-                json.dumps({"error": "No developer set", "hint": DEVELOPER_HINT}),
-                file=sys.stderr,
-            )
-            return 1
-
         items = []
         for dir_name in sorted(all_tasks.keys()):
             t = all_tasks[dir_name]
-            if filter_mine and (t.assignee or "-") != developer:
-                continue
             if filter_status and t.status != filter_status:
                 continue
             items.append({
@@ -407,7 +372,6 @@ def cmd_list(args: argparse.Namespace) -> int:
                 "status": t.status,
                 "display_status": _display_status(t, all_statuses),
                 "priority": t.priority,
-                "assignee": t.assignee or None,
                 "parent": t.parent,
                 "children": list(t.children),
                 "package": t.package,
@@ -415,14 +379,7 @@ def cmd_list(args: argparse.Namespace) -> int:
         print(json.dumps({"tasks": items}, ensure_ascii=False))
         return 0
 
-    if filter_mine:
-        if not developer:
-            print(colored("Error: No developer set. Run init_developer.py first", Colors.RED), file=sys.stderr)
-            print(DEVELOPER_HINT, file=sys.stderr)
-            return 1
-        print(colored(f"My tasks (assignee: {developer}):", Colors.BLUE))
-    else:
-        print(colored("All active tasks:", Colors.BLUE))
+    print(colored("Active tasks:", Colors.BLUE))
     print()
 
     # Display tasks hierarchically
@@ -431,10 +388,6 @@ def cmd_list(args: argparse.Namespace) -> int:
     def _print_task(dir_name: str, indent: int = 0) -> None:
         nonlocal count
         t = all_tasks[dir_name]
-
-        # Apply --mine filter
-        if filter_mine and (t.assignee or "-") != developer:
-            return
 
         # Apply --status filter
         if filter_status and t.status != filter_status:
@@ -454,10 +407,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
         prefix = "  " * indent + "  - "
 
-        if filter_mine:
-            print(f"{prefix}{dir_name}/ ({status_label}){pkg_tag}{progress}{marker}")
-        else:
-            print(f"{prefix}{dir_name}/ ({status_label}){pkg_tag}{progress} [{colored(t.assignee or '-', Colors.CYAN)}]{marker}")
+        print(f"{prefix}{dir_name}/ ({status_label}){pkg_tag}{progress}{marker}")
         count += 1
 
         # Print children indented
@@ -474,10 +424,7 @@ def cmd_list(args: argparse.Namespace) -> int:
             _print_task(dir_name)
 
     if count == 0:
-        if filter_mine:
-            print("  (no tasks assigned to you)")
-        else:
-            print("  (no active tasks)")
+        print("  (no active tasks)")
 
     print()
     print(f"Total: {count} task(s)")
@@ -542,10 +489,11 @@ Usage:
   python3 task.py set-scope <dir> <scope>            Set scope for PR title
   python3 task.py set-meta <dir> <key> <value>       Set/overwrite a task metadata key
   python3 task.py rename <dir> <new-slug>            Rename task, identity fields and references
+  python3 task.py complete <dir> --reason <result>   Record completed acceptance
   python3 task.py archive <task-dir>                 Archive completed task
   python3 task.py add-subtask <parent> <child>       Link child task to parent
   python3 task.py remove-subtask <parent> <child>    Unlink child from parent
-  python3 task.py list [--mine] [--status <status>] [--json]  List tasks
+  python3 task.py list [--status <status>] [--json]  List tasks
   python3 task.py list-archive [YYYY-MM]             List archived tasks
 
 Monorepo options:
@@ -555,7 +503,6 @@ Rename options:
   --dry-run            Print the change set without writing anything
 
 Archive options:
-  --no-commit                Skip the auto git commit after archiving
   --skip-branch-validation   Archive despite missing or self-referential branch metadata.
                              Archive normally refuses a task with no `branch` when it has a
                              `base_branch` and the repo has a remote, or with
@@ -565,7 +512,6 @@ Archive options:
                              deleted is only a warning and needs no flag.
 
 List options:
-  --mine, -m           Show only tasks assigned to current developer
   --status, -s <s>     Filter by status (planning, in_progress, review, completed)
   --json               Output machine-readable JSON (also available on `current`)
 
@@ -586,8 +532,6 @@ Examples:
   python3 task.py add-subtask parent-task child-task  # Link existing tasks
   python3 task.py remove-subtask parent-task child-task
   python3 task.py list                               # List all active tasks
-  python3 task.py list --mine                        # List my tasks only
-  python3 task.py list --mine --status in_progress   # List my in-progress tasks
 """)
 
 
@@ -637,7 +581,6 @@ def main() -> int:
     p_create = subparsers.add_parser("create", help="Create new task")
     p_create.add_argument("title", help="Task title (required, non-empty)")
     p_create.add_argument("--slug", "-s", help="Task slug without the MM-DD date prefix")
-    p_create.add_argument("--assignee", "-a", help="Assignee developer")
     p_create.add_argument("--priority", "-p", default="P2", help="Priority (P0-P3)")
     p_create.add_argument(
         "--description",
@@ -684,11 +627,6 @@ def main() -> int:
     # start
     p_start = subparsers.add_parser("start", help="Set active task")
     p_start.add_argument("dir", help="Task directory")
-    p_start.add_argument(
-        "--allow-empty-context",
-        action="store_true",
-        help="Start even when implement.jsonl / check.jsonl have no curated entries",
-    )
 
     # current
     p_current = subparsers.add_parser("current", help="Show active task")
@@ -731,10 +669,13 @@ def main() -> int:
         help="Print the change set without writing anything",
     )
 
+    p_complete = subparsers.add_parser("complete", help="Record successful acceptance checks")
+    p_complete.add_argument("dir", help="Task directory")
+    p_complete.add_argument("--reason", required=True, help="Completed acceptance checks and results")
+
     # archive
     p_archive = subparsers.add_parser("archive", help="Archive task")
     p_archive.add_argument("name", help="Task directory or name")
-    p_archive.add_argument("--no-commit", action="store_true", help="Skip auto git commit after archive")
     p_archive.add_argument(
         "--skip-branch-validation",
         action="store_true",
@@ -746,7 +687,6 @@ def main() -> int:
 
     # list
     p_list = subparsers.add_parser("list", help="List tasks")
-    p_list.add_argument("--mine", "-m", action="store_true", help="My tasks only")
     p_list.add_argument("--status", "-s", help="Filter by status")
     p_list.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
@@ -784,6 +724,7 @@ def main() -> int:
         "set-meta": cmd_set_meta,
         "rename": cmd_rename,
         "archive": cmd_archive,
+        "complete": cmd_complete,
         "add-subtask": cmd_add_subtask,
         "remove-subtask": cmd_remove_subtask,
         "list": cmd_list,

@@ -484,7 +484,7 @@ def build_context(
         lines.extend(["## task.py current --source", "```", current, "```", ""])
         task_dir = _parse_active_task_path(current, repo)
     else:
-        lines.append("(no .trellis/scripts/task.py — run trellis init first)")
+        lines.append("(no .trellis/scripts/task.py — run trellis-local init first)")
         lines.append("")
 
     if task_dir and task_dir.exists():

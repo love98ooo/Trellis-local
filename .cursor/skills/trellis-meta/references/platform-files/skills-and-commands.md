@@ -81,6 +81,6 @@ They should not store task state; task state belongs in `.trellis/tasks/` and `.
 1. **Keep entry files short; references carry long content**. This matters especially for multi-file skills like `trellis-meta`.
 2. **Make trigger descriptions specific**. A description that is too broad can mis-trigger; one that is too narrow may not trigger.
 3. **Keep the same semantics consistent across platforms**. File formats can differ, but behavior descriptions should match.
-4. **Put project-specific capabilities in local skills**. Do not put team-private flows into public `trellis-meta`.
+4. **Put project-specific capabilities in local skills**. Do not put project-private flows into public `trellis-meta`.
 
 If the user only wants local AI to know one more project rule, usually create a project-local skill or update `.trellis/spec/` instead of changing a Trellis built-in workflow skill.

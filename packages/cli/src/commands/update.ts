@@ -1,5 +1,8 @@
+import {
+  assertLocalState,
+  retirePersonalFiles,
+} from "../utils/personal-project.js";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import chalk from "chalk";
 import inquirer from "inquirer";
@@ -34,7 +37,6 @@ import {
 import { compareVersions } from "../utils/compare-versions.js";
 import { toPosix } from "../utils/posix.js";
 import { setupProxy } from "../utils/proxy.js";
-import { emptyTaskJson } from "../utils/task-json.js";
 
 // Import templates for comparison
 import {
@@ -42,7 +44,6 @@ import {
   getAllAgents,
   // Configuration
   configYamlTemplate,
-  gitignoreTemplate,
   workflowMdTemplate,
 } from "../templates/trellis/index.js";
 import { agentsMdContent } from "../templates/markdown/index.js";
@@ -61,18 +62,7 @@ import {
 import { replacePythonCommandLiterals } from "../configurators/shared.js";
 import { preserveCodexAgentModelKeys } from "../configurators/codex.js";
 import { printZcodeSetupHint } from "../configurators/zcode.js";
-import { ensureGitattributes } from "../configurators/workflow.js";
 import { pruneOrphanManifestKeys } from "../utils/manifest-prune.js";
-import {
-  fetchRegistrySpecTemplates,
-  collectDirectoryFiles,
-  removeDirectory,
-  parseRegistrySource,
-  probeRegistryIndex,
-  downloadTemplateById,
-  type RegistrySource,
-} from "../utils/template-fetcher.js";
-import { loadSpecRegistryConfig } from "../utils/registry-config.js";
 import {
   cleanupEmptyDirs,
   TRELLIS_BLOCK_END,
@@ -127,7 +117,6 @@ const PROTECTED_PATHS = [
   `${DIR_NAMES.WORKFLOW}/${DIR_NAMES.WORKSPACE}`, // workspace/
   `${DIR_NAMES.WORKFLOW}/${DIR_NAMES.TASKS}`, // tasks/
   `${DIR_NAMES.WORKFLOW}/${DIR_NAMES.SPEC}`, // spec/
-  `${DIR_NAMES.WORKFLOW}/.developer`,
   `${DIR_NAMES.WORKFLOW}/.current-task`,
 ];
 
@@ -741,118 +730,6 @@ function preserveExistingClaudeStatusLine(
   }
 }
 
-function preserveExistingRegistryConfig(cwd: string, template: string): string {
-  const registry = loadSpecRegistryConfig(cwd);
-  if (!registry) return template;
-  return (
-    template.trimEnd() +
-    "\n\n" +
-    "#-------------------------------------------------------------------------------\n" +
-    "# Registry\n" +
-    "#-------------------------------------------------------------------------------\n\n" +
-    "# Source used to install .trellis/spec. trellis update refreshes this\n" +
-    "# hash-tracked spec template while preserving local edits through the\n" +
-    "# normal update conflict flow.\n" +
-    "registry:\n" +
-    "  spec:\n" +
-    `    source: ${registry.source}\n` +
-    (registry.template ? `    template: ${registry.template}\n` : "")
-  );
-}
-
-async function collectRegistrySpecTemplates(
-  cwd: string,
-): Promise<Map<string, string>> {
-  const config = loadSpecRegistryConfig(cwd);
-  if (!config) return new Map();
-
-  let registry: RegistrySource;
-  try {
-    registry = parseRegistrySource(config.source);
-  } catch (error) {
-    console.log(
-      chalk.yellow(
-        `Warning: invalid registry.spec.source in .trellis/config.yaml: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      ),
-    );
-    return new Map();
-  }
-
-  const probe = await probeRegistryIndex(
-    `${registry.rawBaseUrl}/index.json`,
-    registry,
-  );
-  if (probe.templates.length > 0) {
-    if (!config.template) {
-      console.log(
-        chalk.gray(
-          "Registry spec update skipped: marketplace registries require registry.spec.template.",
-        ),
-      );
-      return new Map();
-    }
-    const template = probe.templates.find(
-      (candidate) => candidate.id === config.template,
-    );
-    if (!template) {
-      console.log(
-        chalk.yellow(
-          `Warning: registry spec update skipped: template "${config.template}" was not found in registry index.`,
-        ),
-      );
-      return new Map();
-    }
-    const tempRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "trellis-registry-template-"),
-    );
-    try {
-      const result = await downloadTemplateById(
-        tempRoot,
-        config.template,
-        "overwrite",
-        template,
-        registry,
-        undefined,
-        probe.backend,
-      );
-      if (!result.success) {
-        console.log(
-          chalk.yellow(
-            `Warning: registry spec update skipped: ${result.message}`,
-          ),
-        );
-        return new Map();
-      }
-      return collectDirectoryFiles(path.join(tempRoot, PATHS.SPEC), PATHS.SPEC);
-    } finally {
-      await removeDirectory(tempRoot);
-    }
-  }
-  if (!probe.isNotFound) {
-    console.log(
-      chalk.yellow(
-        `Warning: registry spec update skipped: ${
-          probe.error?.message ?? "could not reach registry"
-        }`,
-      ),
-    );
-    return new Map();
-  }
-
-  const result = await fetchRegistrySpecTemplates(registry, probe.backend);
-  if (!result.success) {
-    console.log(
-      chalk.yellow(
-        `Warning: registry spec update skipped: ${result.message ?? "download failed"}`,
-      ),
-    );
-    return new Map();
-  }
-  return result.files;
-}
-
 async function collectTemplateFiles(
   cwd: string,
   extraPlatforms?: Set<AITool>,
@@ -888,11 +765,7 @@ async function collectTemplateFiles(
   }
 
   // Configuration
-  files.set(
-    `${DIR_NAMES.WORKFLOW}/config.yaml`,
-    preserveExistingRegistryConfig(cwd, configYamlTemplate),
-  );
-  files.set(`${DIR_NAMES.WORKFLOW}/.gitignore`, gitignoreTemplate);
+  files.set(`${DIR_NAMES.WORKFLOW}/config.yaml`, configYamlTemplate);
   // workflow.md is included here because it is runtime-parsed by
   // get_context.py and shared hooks. Keep it on the normal template update
   // path: if the installed file still matches the tracked hash, update the
@@ -931,10 +804,6 @@ async function collectTemplateFiles(
   }
 
   preserveExistingClaudeStatusLine(cwd, files);
-
-  for (const [filePath, content] of await collectRegistrySpecTemplates(cwd)) {
-    files.set(filePath, content);
-  }
 
   // Apply update.skip from config.yaml (unless bypassed for breaking release)
   if (!bypassUpdateSkip) {
@@ -987,6 +856,9 @@ function analyzeChanges(
   for (const [relativePath, newContent] of templates) {
     const fullPath = path.join(cwd, relativePath);
     const exists = fs.existsSync(fullPath);
+    // Local preferences survive template updates, including --force.
+    if (exists && relativePath === `${DIR_NAMES.WORKFLOW}/config.yaml`)
+      continue;
 
     const change: FileChange = {
       path: fullPath,
@@ -1074,6 +946,14 @@ function collectUnchangedFileHashRepairs(
 
   for (const file of changes.unchangedFiles) {
     const key = toPosix(file.relativePath);
+    // These desired files include local content merged at collection time.
+    if (
+      hashes[key] !== undefined &&
+      (key === FILE_NAMES.AGENTS ||
+        key === COPILOT_INSTRUCTIONS_PATH ||
+        key === `${DIR_NAMES.WORKFLOW}/config.yaml`)
+    )
+      continue;
     const recorded = hashes[key];
 
     if (recorded === undefined) {
@@ -2054,52 +1934,16 @@ function printMigrationResult(result: MigrationResult): void {
 }
 
 /**
- * One-time 0.2.0 migration: rename `traces-*.md` → `journal-*.md` in every
- * developer workspace directory.
- *
- * Never overwrites an existing `journal-N.md`: a newer session may already
- * have created it, and `.trellis/workspace/` is excluded from the update
- * backup (see `BACKUP_EXCLUDE_PATTERNS`), so clobbering it would be
- * unrecoverable data loss. Conflicting `traces-N.md` files are left in place
- * and reported instead.
- */
-export function renameTracesToJournal(workspaceDir: string): {
-  renamed: number;
-  skipped: string[];
-} {
-  const skipped: string[] = [];
-  let renamed = 0;
-  if (!fs.existsSync(workspaceDir)) return { renamed, skipped };
-
-  for (const dev of fs.readdirSync(workspaceDir)) {
-    const devPath = path.join(workspaceDir, dev);
-    if (!fs.statSync(devPath).isDirectory()) continue;
-
-    for (const file of fs.readdirSync(devPath)) {
-      if (!(file.startsWith("traces-") && file.endsWith(".md"))) continue;
-      const oldPath = path.join(devPath, file);
-      const newPath = path.join(devPath, file.replace("traces-", "journal-"));
-      if (fs.existsSync(newPath)) {
-        skipped.push(oldPath);
-        continue;
-      }
-      fs.renameSync(oldPath, newPath);
-      renamed++;
-    }
-  }
-  return { renamed, skipped };
-}
-
-/**
  * Main update command
  */
 export async function update(options: UpdateOptions): Promise<void> {
   const cwd = process.cwd();
+  assertLocalState(cwd);
 
   // Check if Trellis is initialized
   if (!fs.existsSync(path.join(cwd, DIR_NAMES.WORKFLOW))) {
     console.log(chalk.red("Error: Trellis not initialized in this directory."));
-    console.log(chalk.gray("Run 'trellis init' first."));
+    console.log(chalk.gray("Run 'trellis-local init' first."));
     return;
   }
 
@@ -2137,7 +1981,7 @@ export async function update(options: UpdateOptions): Promise<void> {
         `⚠️  Your CLI (${cliVersion}) is behind npm (${latestNpmVersion}).`,
       ),
     );
-    console.log(chalk.yellow(`   Run: trellis upgrade\n`));
+    console.log(chalk.yellow(`   Run: pnpm local:install\n`));
   }
 
   // Check for downgrade situation
@@ -2151,9 +1995,15 @@ export async function update(options: UpdateOptions): Promise<void> {
 
     if (!options.allowDowngrade) {
       console.log(chalk.gray("Solutions:"));
-      console.log(chalk.gray(`  1. Update your CLI: trellis upgrade`));
       console.log(
-        chalk.gray(`  2. Force downgrade: trellis update --allow-downgrade\n`),
+        chalk.gray(
+          `  1. Rebuild the local fork in its source checkout: pnpm local:install`,
+        ),
+      );
+      console.log(
+        chalk.gray(
+          `  2. Force downgrade: trellis-local update --allow-downgrade\n`,
+        ),
       );
       return;
     }
@@ -2167,6 +2017,8 @@ export async function update(options: UpdateOptions): Promise<void> {
 
   // Migration metadata is displayed at the end to prevent scrolling off screen
 
+  retirePersonalFiles(cwd, options);
+
   // Load template hashes for modification detection
   let hashes = loadHashes(cwd);
   const zcodeConfigured = getConfiguredPlatforms(cwd).has("zcode");
@@ -2177,7 +2029,7 @@ export async function update(options: UpdateOptions): Promise<void> {
   if (isUnknownVersion) {
     console.log(
       chalk.yellow(
-        "⚠️  No version file found. Skipping migrations — run trellis init to fix.",
+        "⚠️  No version file found. Skipping migrations — run trellis-local init to fix.",
       ),
     );
     console.log(chalk.gray("   Template updates will still be applied."));
@@ -2212,6 +2064,7 @@ export async function update(options: UpdateOptions): Promise<void> {
       cwd,
       [...configuredPlatforms],
       hashes,
+      { persist: !options.dryRun },
     );
     if (prune.pruned.length > 0) {
       console.log(
@@ -2343,7 +2196,7 @@ export async function update(options: UpdateOptions): Promise<void> {
             ),
         );
         console.log("");
-        console.log(chalk.yellow(`  Run: trellis update --migrate`));
+        console.log(chalk.yellow(`  Run: trellis-local update --migrate`));
         console.log("");
         console.log(
           chalk.gray(
@@ -2408,14 +2261,6 @@ export async function update(options: UpdateOptions): Promise<void> {
         "   After this update, hash tracking will accurately detect changes.\n",
       ),
     );
-  }
-
-  // Ensure project-root .gitattributes carries the journal merge=union rule.
-  // Additive-only (see ensureGitattributes) — runs regardless of whether
-  // other template files changed, so it must sit before the "nothing to do"
-  // early-return below. Never touches disk in --dry-run.
-  if (!options.dryRun) {
-    ensureGitattributes(cwd);
   }
 
   // Check if there's anything to do
@@ -2575,27 +2420,6 @@ export async function update(options: UpdateOptions): Promise<void> {
       templates,
     );
     printMigrationResult(migrationResult);
-
-    // Hardcoded: Rename traces-*.md to journal-*.md in workspace directories
-    // Why hardcoded: The migration system only supports fixed path renames, not pattern-based.
-    // traces-*.md files are in .trellis/workspace/{developer}/ with variable developer names
-    // and variable file numbers (traces-1.md, traces-2.md, etc.), so we can't enumerate them
-    // in the migration manifest. This is a one-time migration for the 0.2.0 naming redesign.
-    const workspaceDir = path.join(cwd, PATHS.WORKSPACE);
-    const { renamed: journalRenamed, skipped: journalSkipped } =
-      renameTracesToJournal(workspaceDir);
-    if (journalRenamed > 0) {
-      console.log(
-        chalk.cyan(`Renamed ${journalRenamed} traces file(s) to journal`),
-      );
-    }
-    for (const oldPath of journalSkipped) {
-      console.warn(
-        chalk.yellow(
-          `Kept ${path.relative(cwd, oldPath)}: its journal target already exists`,
-        ),
-      );
-    }
   }
 
   // Execute safe-file-delete (after backup, before template writes)
@@ -2772,113 +2596,6 @@ export async function update(options: UpdateOptions): Promise<void> {
         "\nTip: Review .new files and merge changes manually if needed.",
       ),
     );
-  }
-
-  // Create migration task if there are breaking changes with migration guides
-  if (cliVsProject > 0 && projectVersion !== "unknown") {
-    const metadata = getMigrationMetadata(projectVersion, cliVersion);
-
-    if (metadata.breaking && metadata.migrationGuides.length > 0) {
-      // Create task directory
-      const today = new Date();
-      const monthDay = `${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-      const taskSlug = `migrate-to-${cliVersion}`;
-      const taskDirName = `${monthDay}-${taskSlug}`;
-      const tasksDir = path.join(cwd, DIR_NAMES.WORKFLOW, DIR_NAMES.TASKS);
-      const taskDir = path.join(tasksDir, taskDirName);
-
-      // Check if task already exists
-      if (!fs.existsSync(taskDir)) {
-        fs.mkdirSync(taskDir, { recursive: true });
-
-        // Get current developer for assignee.
-        // `.developer` is a key=value file (written by init_developer.py):
-        //   name=<developer-name>
-        //   initialized_at=<iso8601>
-        // Reading it raw and .trim()-ing embeds the entire file contents
-        // (including the `name=` prefix and the `initialized_at` line) into
-        // the assignee field, producing bogus assignees like
-        // "name=suyuan\ninitialized_at=2026-04-07T23:41:21.978312" that
-        // later break session-start task rendering.
-        const developerFile = path.join(cwd, DIR_NAMES.WORKFLOW, ".developer");
-        let currentDeveloper = "unknown";
-        if (fs.existsSync(developerFile)) {
-          const raw = fs.readFileSync(developerFile, "utf-8");
-          const nameMatch = raw.match(/^\s*name\s*=\s*(.+?)\s*$/m);
-          if (nameMatch) {
-            currentDeveloper = nameMatch[1];
-          }
-        }
-
-        // Build task.json — canonical 24-field shape via shared factory.
-        const taskTitle = `Migrate to v${cliVersion}`;
-        const todayStr = today.toISOString().split("T")[0];
-        const taskJson = emptyTaskJson({
-          id: taskSlug,
-          name: taskSlug,
-          title: taskTitle,
-          description: `Breaking change migration from v${projectVersion} to v${cliVersion}`,
-          status: "planning",
-          scope: "migration",
-          priority: "P1",
-          creator: "trellis-update",
-          assignee: currentDeveloper,
-          createdAt: todayStr,
-        });
-
-        // Write task.json
-        const taskJsonPath = path.join(taskDir, "task.json");
-        fs.writeFileSync(taskJsonPath, JSON.stringify(taskJson, null, 2));
-
-        // Build PRD content
-        let prdContent = `# Migration Task: Upgrade to v${cliVersion}\n\n`;
-        prdContent += `**Created**: ${todayStr}\n`;
-        prdContent += `**From Version**: ${projectVersion}\n`;
-        prdContent += `**To Version**: ${cliVersion}\n`;
-        prdContent += `**Assignee**: ${currentDeveloper}\n\n`;
-        prdContent += `## Status\n\n- [ ] Review migration guide\n- [ ] Update custom files\n- [ ] Run \`trellis update --migrate\`\n- [ ] Test workflows\n\n`;
-
-        for (const {
-          version,
-          guide,
-          aiInstructions,
-        } of metadata.migrationGuides) {
-          prdContent += `---\n\n## v${version} Migration Guide\n\n`;
-          prdContent += guide;
-          prdContent += "\n\n";
-
-          if (aiInstructions) {
-            prdContent += `### AI Assistant Instructions\n\n`;
-            prdContent += `When helping with this migration:\n\n`;
-            prdContent += aiInstructions;
-            prdContent += "\n\n";
-          }
-        }
-
-        // Write PRD
-        const prdPath = path.join(taskDir, "prd.md");
-        fs.writeFileSync(prdPath, prdContent);
-
-        console.log("");
-        console.log(chalk.bgCyan.black.bold(" 📋 MIGRATION TASK CREATED "));
-        console.log(
-          chalk.cyan(
-            `A task has been created to help you complete the migration:`,
-          ),
-        );
-        console.log(
-          chalk.white(
-            `   ${DIR_NAMES.WORKFLOW}/${DIR_NAMES.TASKS}/${taskDirName}/`,
-          ),
-        );
-        console.log("");
-        console.log(
-          chalk.gray(
-            "Use AI to help: Ask Claude/Cursor to read the task and fix your custom files.",
-          ),
-        );
-      }
-    }
   }
 
   if (zcodeConfigured) printZcodeSetupHint();

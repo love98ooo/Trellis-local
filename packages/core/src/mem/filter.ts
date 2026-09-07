@@ -6,6 +6,7 @@
  * needs exactly the same semantics.
  */
 
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { MemFilter } from "./types.js";
@@ -54,8 +55,8 @@ export function inRangeOverlap(
   return true;
 }
 
-/** True iff `sessionCwd` is within `target` (exact match or descendant
- * directory). When `target` is undefined there is no scoping and everything
+/** True iff `sessionCwd` is within `target` without crossing a nested Git
+ * boundary. When `target` is undefined there is no scoping and everything
  * matches; sessions with an unknown cwd are dropped under scoping. */
 export function sameProject(
   sessionCwd: string | undefined,
@@ -65,5 +66,12 @@ export function sameProject(
   if (!sessionCwd) return false;
   const a = path.resolve(sessionCwd);
   const b = path.resolve(target);
-  return a === b || a.startsWith(b + path.sep);
+  if (a === b) return true;
+  if (!a.startsWith(b + path.sep)) return false;
+  // 普通 package 子目录属于当前项目，但嵌套仓库和 worktree 有自己的记忆。
+  // 已删除目录没有可检查的 Git 边界，继续保留历史路径的前缀匹配语义。
+  for (let dir = a; dir !== b; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, ".git"))) return false;
+  }
+  return true;
 }

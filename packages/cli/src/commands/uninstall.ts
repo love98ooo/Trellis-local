@@ -17,7 +17,7 @@
  * (per the PRD: "全删"). The `.trellis/` tree is removed unconditionally.
  */
 
-import { execFileSync } from "node:child_process";
+import { agentProgressIndexContent } from "../templates/markdown/index.js";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -117,38 +117,29 @@ async function promptContinue(): Promise<boolean> {
   return proceed;
 }
 
-/**
- * List uncommitted (modified, staged, or untracked) files under the
- * user-data subdirectories of `.trellis/` — spec/, tasks/, workspace/ — which
- * hold user-authored specs, task PRDs, and journals that `update.ts` marks as
- * PROTECTED. Uninstall deletes the whole `.trellis/` tree with no backup, so
- * these are surfaced before the destructive step. Returns `[]` when this is
- * not a git repo or git is unavailable (nothing we can check).
- */
+/** List local user data before permanent removal, including Git-ignored files. */
 export function collectUncommittedTrellisData(cwd: string): string[] {
-  const w = DIR_NAMES.WORKFLOW;
-  const userDataDirs = [
-    `${w}/${DIR_NAMES.SPEC}`,
-    `${w}/${DIR_NAMES.TASKS}`,
-    `${w}/${DIR_NAMES.WORKSPACE}`,
-  ];
-  try {
-    const out = execFileSync(
-      "git",
-      ["-C", cwd, "status", "--porcelain", "--", ...userDataDirs],
-      { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
-    );
-    return (
-      out
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        // Strip the 2-char status code, then keep the post-rename path if any.
-        .map((line) => line.replace(/^\S+\s+/, "").replace(/^.*\s->\s/, ""))
-    );
-  } catch {
-    return [];
+  const files: string[] = [];
+  function walk(dir: string): void {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else {
+        const rel = path.relative(cwd, file).split(path.sep).join("/");
+        if (
+          rel === ".trellis/workspace/index.md" &&
+          entry.isFile() &&
+          fs.readFileSync(file, "utf8") === agentProgressIndexContent
+        )
+          continue;
+        files.push(rel);
+      }
+    }
   }
+  for (const dir of ["spec", "tasks", "workspace"])
+    walk(path.join(cwd, DIR_NAMES.WORKFLOW, dir));
+  return files;
 }
 
 /** Whether the uncommitted-data guard has been explicitly overridden. */
@@ -232,7 +223,7 @@ export async function uninstall(options: UninstallOptions = {}): Promise<void> {
   if (uncommitted.length > 0) {
     console.warn(
       chalk.red.bold(
-        `\n⚠ ${uncommitted.length} uncommitted file(s) under .trellis/ (spec/tasks/workspace) ` +
+        `\n⚠ ${uncommitted.length} local data file(s) under .trellis/ (spec/tasks/workspace) ` +
           `will be permanently deleted with no backup:`,
       ),
     );
@@ -243,7 +234,9 @@ export async function uninstall(options: UninstallOptions = {}): Promise<void> {
       console.warn(chalk.red(`    … and ${uncommitted.length - 20} more`));
     }
     console.warn(
-      chalk.yellow("Commit or stash them first if you want to keep them.\n"),
+      chalk.yellow(
+        "Copy them outside this checkout first if you want to keep them.\n",
+      ),
     );
   }
 
@@ -255,8 +248,8 @@ export async function uninstall(options: UninstallOptions = {}): Promise<void> {
   if (uncommitted.length > 0 && options.yes && !dirtyUninstallBypassEnabled()) {
     console.error(
       chalk.red(
-        "Refusing to uninstall with --yes while .trellis/ has uncommitted user data " +
-          "(spec/tasks/workspace). Commit or stash it, re-run without --yes to confirm " +
+        "Refusing to uninstall with --yes while .trellis/ has local user data " +
+          "(spec/tasks/workspace). Back it up outside this checkout, re-run without --yes to confirm " +
           "interactively, or set TRELLIS_ALLOW_DIRTY_UNINSTALL=1 to override.",
       ),
     );

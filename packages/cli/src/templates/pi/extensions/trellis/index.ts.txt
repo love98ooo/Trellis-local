@@ -1075,7 +1075,7 @@ function contextKey(input?: unknown, ctx?: PiExtensionContext): string | null {
  *
  * A session pointer is not always something the user typed. `task.py` now
  * refuses to store a ref that leaves the project, but a session file written
- * before that fix can still hold one, and `trellis update` does not rewrite
+ * before that fix can still hold one, and `trellis-local update` does not rewrite
  * session files — so a poisoned pointer outlives the upgrade that closed the
  * writer. Both sides are resolved so a task directory symlinked outside is
  * refused too, but the original `candidate` is returned on success: callers do
@@ -1200,7 +1200,7 @@ function buildStartupContext(
 function buildContext(root: string, agent: string, key: string | null): string {
   const dir = readTaskDir(root, key);
   if (!dir)
-    return "No active Trellis task found. Read .trellis/ before proceeding.";
+    return "No active Trellis task. Follow .trellis/workflow.md and proceed with the authorized request.";
   const relTaskDir = relative(root, dir).replace(/\\/g, "/");
   const limits = readContextInjectionLimits(root);
   const budget = new ContextBudget(limits.max_total_bytes);
@@ -1931,7 +1931,7 @@ export default function trellisExtension(pi: {
   pi.on?.("session_start", (event, ctx) => {
     getKey(event, ctx);
     ctx?.ui?.notify?.(
-      "Trellis project context is available. Use /trellis-start to bootstrap or /trellis-continue to resume.",
+      "Trellis project context is available. Use /trellis-start for session context or /trellis-continue to resume.",
       "info",
     );
   });

@@ -20,7 +20,6 @@ import {
   channelDir,
   currentProjectKey,
   listProjects,
-  migrateLegacyChannels,
   projectDir,
 } from "./store/paths.js";
 import { GLOBAL_PROJECT_KEY, parseChannelScope } from "./store/schema.js";
@@ -53,10 +52,6 @@ export interface ListOptions {
 }
 
 export async function channelList(opts: ListOptions = {}): Promise<void> {
-  // Move any pre-bucket flat channels into `_legacy/` before listing,
-  // so the new layout is the authoritative view.
-  migrateLegacyChannels();
-
   const scope = parseChannelScope(opts.scope);
   const projects =
     scope === "global"

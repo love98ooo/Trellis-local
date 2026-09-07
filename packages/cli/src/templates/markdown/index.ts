@@ -26,16 +26,12 @@ function readLocalTemplate(filename: string): string {
 
 export const agentsMdContent: string = readLocalTemplate("agents.md");
 
-// Workspace index template (developer work records)
+// Personal worktree journal index
 export const workspaceIndexContent: string =
   readLocalTemplate("workspace-index.md");
 
 // Backwards compatibility alias
 export const agentProgressIndexContent = workspaceIndexContent;
-
-// Gitignore (template file - .gitignore is ignored by npm)
-export const workflowGitignoreContent: string =
-  readLocalTemplate("gitignore.txt");
 
 // =============================================================================
 // Structure templates (generic templates from .txt files)

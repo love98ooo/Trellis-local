@@ -21,8 +21,7 @@ export interface MutationCommonOptions {
 }
 
 export interface CreateChannelOptions
-  extends ChannelAddressOptions,
-    MutationCommonOptions {
+  extends ChannelAddressOptions, MutationCommonOptions {
   type?: "chat" | "forum";
   task?: string;
   project?: string;
@@ -35,8 +34,7 @@ export interface CreateChannelOptions
 }
 
 export interface SendMessageOptions
-  extends ChannelAddressOptions,
-    MutationCommonOptions {
+  extends ChannelAddressOptions, MutationCommonOptions {
   idempotencyKey?: string;
   text: string;
   to?: string | string[];
@@ -50,31 +48,21 @@ export interface SendMessageOptions
 }
 
 export interface PostThreadOptions
-  extends ChannelAddressOptions,
-    MutationCommonOptions {
+  extends ChannelAddressOptions, MutationCommonOptions {
   idempotencyKey?: string;
-  action:
-    | "opened"
-    | "comment"
-    | "status"
-    | "labels"
-    | "assignees"
-    | "summary"
-    | "processed";
+  action: "opened" | "comment" | "status" | "labels" | "summary" | "processed";
   thread: string;
   title?: string;
   text?: string;
   description?: string;
   status?: string;
   labels?: string[];
-  assignees?: string[];
   summary?: string;
   context?: ContextEntry[];
 }
 
 export interface ContextMutationOptions
-  extends ChannelAddressOptions,
-    MutationCommonOptions {
+  extends ChannelAddressOptions, MutationCommonOptions {
   context: ContextEntry[];
 }
 
@@ -83,15 +71,13 @@ export interface ThreadContextMutationOptions extends ContextMutationOptions {
 }
 
 export interface RenameThreadOptions
-  extends ChannelAddressOptions,
-    MutationCommonOptions {
+  extends ChannelAddressOptions, MutationCommonOptions {
   thread: string;
   newThread: string;
 }
 
 export interface SetChannelTitleOptions
-  extends ChannelAddressOptions,
-    MutationCommonOptions {
+  extends ChannelAddressOptions, MutationCommonOptions {
   title: string;
 }
 

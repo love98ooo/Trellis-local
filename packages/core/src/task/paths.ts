@@ -6,28 +6,18 @@
  *
  *     <tasks-dir>/05-13-trellis-core-sdk-package/
  *
- * Trellis also creates system onboarding tasks during `trellis init` using a
- * `00-slug` prefix, such as `00-bootstrap-guidelines` and `00-join-new-developer`.
- *
  * `MM` is the two-digit month, `DD` is the two-digit day, and `slug` is
  * a lower-kebab-case identifier composed of `[a-z0-9-]+` characters.
  */
 
 const DATED_TASK_DIR_RE =
   /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])-([a-z0-9]+(?:-[a-z0-9]+)*)$/;
-const SYSTEM_TASK_DIR_RE =
-  /^00-(bootstrap-guidelines|join-[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 
 export interface TaskDirParts {
-  /**
-   * The directory prefix. Dated tasks use `MM-DD`; Trellis system onboarding
-   * tasks use `00`.
-   */
+  /** 日期前缀 MM-DD。 */
   prefix: string;
-  /** Two-digit month for dated tasks, or `null` for `00-*` system tasks. */
-  month: string | null;
-  /** Two-digit day for dated tasks, or `null` for `00-*` system tasks. */
-  day: string | null;
+  month: string;
+  day: string;
   slug: string;
 }
 
@@ -50,13 +40,6 @@ export function validateTaskDirName(name: string): TaskDirParts | null {
       return null;
     }
     return { prefix: `${month}-${day}`, month, day, slug };
-  }
-
-  const system = SYSTEM_TASK_DIR_RE.exec(name);
-  if (system) {
-    const [, slug] = system;
-    if (slug === undefined) return null;
-    return { prefix: "00", month: null, day: null, slug };
   }
 
   return null;

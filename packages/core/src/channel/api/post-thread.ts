@@ -3,9 +3,7 @@ import {
   type ThreadChannelEvent,
 } from "../internal/store/events.js";
 import { normalizeThreadKey } from "../internal/store/schema.js";
-import {
-  buildThreadAliasResolver,
-} from "../internal/store/thread-state.js";
+import { buildThreadAliasResolver } from "../internal/store/thread-state.js";
 import { readForumChannelEvents } from "./assert.js";
 import { resolveChannelRef } from "./resolve.js";
 import type { PostThreadOptions, RenameThreadOptions } from "./types.js";
@@ -15,7 +13,6 @@ const VALID_ACTIONS: ReadonlySet<PostThreadOptions["action"]> = new Set([
   "comment",
   "status",
   "labels",
-  "assignees",
   "summary",
   "processed",
 ]);
@@ -58,7 +55,6 @@ export async function postThread(
         : {}),
       ...(opts.status !== undefined ? { status: opts.status } : {}),
       ...(opts.labels !== undefined ? { labels: opts.labels } : {}),
-      ...(opts.assignees !== undefined ? { assignees: opts.assignees } : {}),
       ...(opts.summary !== undefined ? { summary: opts.summary } : {}),
       ...(opts.context !== undefined && opts.context.length > 0
         ? { context: opts.context }
@@ -113,9 +109,7 @@ export async function renameThread(
       ev.kind === "thread" &&
       typeof (ev as ThreadChannelEvent).thread === "string"
     ) {
-      knownKeys.add(
-        resolver.resolve((ev as ThreadChannelEvent).thread),
-      );
+      knownKeys.add(resolver.resolve((ev as ThreadChannelEvent).thread));
     }
   }
   if (!knownKeys.has(oldCurrent)) {

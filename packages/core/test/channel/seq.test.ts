@@ -8,6 +8,7 @@ import {
   readChannelEvents,
 } from "../../src/channel/index.js";
 import {
+  currentProjectKey,
   eventsPath,
   seqSidecarPath,
 } from "../../src/channel/internal/store/paths.js";
@@ -31,12 +32,7 @@ describe("appendEvent + .seq sidecar", () => {
     const events = await readChannelEvents({ channel: "ch1" });
     expect(events.map((e) => e.seq)).toEqual([1, 2]);
 
-    const sidecar = await fsp.readFile(
-      seqSidecarPath("ch1", "_global"),
-      "utf-8",
-    ).catch(async () =>
-      fsp.readFile(seqSidecarPath("ch1", process.env.TRELLIS_CHANNEL_PROJECT ?? "_global"), "utf-8"),
-    );
+    const sidecar = await fsp.readFile(seqSidecarPath("ch1"), "utf-8");
     expect(sidecar.trim()).toBe("2");
   });
 
@@ -62,7 +58,7 @@ describe("appendEvent + .seq sidecar", () => {
     await sendMessage({ channel: "lazy", by: "main", text: "one" });
     await sendMessage({ channel: "lazy", by: "main", text: "two" });
     // Delete the sidecar to simulate a pre-sidecar channel.
-    const projectKey = process.env.TRELLIS_CHANNEL_PROJECT ?? "";
+    const projectKey = currentProjectKey();
     const sidecar = seqSidecarPath("lazy", projectKey);
     fs.unlinkSync(sidecar);
     await sendMessage({ channel: "lazy", by: "main", text: "three" });
@@ -75,7 +71,7 @@ describe("appendEvent + .seq sidecar", () => {
   it("rebuilds sidecar when corrupted", async () => {
     await createChannel({ channel: "corrupt", by: "main" });
     await sendMessage({ channel: "corrupt", by: "main", text: "one" });
-    const projectKey = process.env.TRELLIS_CHANNEL_PROJECT ?? "";
+    const projectKey = currentProjectKey();
     const sidecar = seqSidecarPath("corrupt", projectKey);
     fs.writeFileSync(sidecar, "not-a-number\n");
     await sendMessage({ channel: "corrupt", by: "main", text: "two" });
@@ -88,7 +84,7 @@ describe("appendEvent + .seq sidecar", () => {
     await createChannel({ channel: "behind", by: "main" });
     await sendMessage({ channel: "behind", by: "main", text: "one" });
     await sendMessage({ channel: "behind", by: "main", text: "two" });
-    const projectKey = process.env.TRELLIS_CHANNEL_PROJECT ?? "";
+    const projectKey = currentProjectKey();
     const sidecar = seqSidecarPath("behind", projectKey);
     fs.writeFileSync(sidecar, "1\n");
     await sendMessage({ channel: "behind", by: "main", text: "three" });
@@ -100,7 +96,7 @@ describe("appendEvent + .seq sidecar", () => {
   it("repairs sidecar ahead of JSONL tail without seq gap", async () => {
     await createChannel({ channel: "ahead", by: "main" });
     await sendMessage({ channel: "ahead", by: "main", text: "one" });
-    const projectKey = process.env.TRELLIS_CHANNEL_PROJECT ?? "";
+    const projectKey = currentProjectKey();
     const sidecar = seqSidecarPath("ahead", projectKey);
     fs.writeFileSync(sidecar, "99\n");
     await sendMessage({ channel: "ahead", by: "main", text: "two" });
@@ -114,10 +110,7 @@ describe("appendEvent + .seq sidecar", () => {
   it("continues seq after a torn JSONL tail", async () => {
     await createChannel({ channel: "torn", by: "main" });
     await sendMessage({ channel: "torn", by: "main", text: "one" });
-    const file = eventsPath(
-      "torn",
-      process.env.TRELLIS_CHANNEL_PROJECT ?? "",
-    );
+    const file = eventsPath("torn", currentProjectKey());
     const prefix = fs.readFileSync(file);
     fs.appendFileSync(file, '{"seq":99,"kind":"progress","by":"w","text":"cut');
     await sendMessage({ channel: "torn", by: "main", text: "two" });
@@ -132,10 +125,7 @@ describe("appendEvent + .seq sidecar", () => {
   it("continues seq after a tail cut mid-multibyte character", async () => {
     await createChannel({ channel: "utf8-torn", by: "main" });
     await sendMessage({ channel: "utf8-torn", by: "main", text: "one" });
-    const file = eventsPath(
-      "utf8-torn",
-      process.env.TRELLIS_CHANNEL_PROJECT ?? "",
-    );
+    const file = eventsPath("utf8-torn", currentProjectKey());
     const prefix = fs.readFileSync(file);
     // Incomplete UTF-8 for U+4E2D (中): first two bytes only.
     fs.appendFileSync(file, Buffer.from([0xe4, 0xb8]));
@@ -149,7 +139,7 @@ describe("appendEvent + .seq sidecar", () => {
   it("fails seq recovery when JSONL has no recoverable seq", async () => {
     await createChannel({ channel: "bad-jsonl", by: "main" });
     const file = eventsPath("bad-jsonl");
-    fs.writeFileSync(file, "not-json\n{\"kind\":\"message\"}\n");
+    fs.writeFileSync(file, 'not-json\n{"kind":"message"}\n');
 
     await expect(
       sendMessage({ channel: "bad-jsonl", by: "main", text: "two" }),
@@ -173,10 +163,7 @@ describe("appendEvent + .seq sidecar", () => {
     // Smoke check: the JSONL is bigger than the sidecar tail window so a
     // full-scan path would be observably more expensive. Just confirm
     // size > tail size used by seq.ts (4096B) to make the intent obvious.
-    const file = eventsPath(
-      "no-fullscan",
-      process.env.TRELLIS_CHANNEL_PROJECT ?? "",
-    );
+    const file = eventsPath("no-fullscan", currentProjectKey());
     expect(fs.statSync(file).size).toBeGreaterThan(4096);
   });
 });

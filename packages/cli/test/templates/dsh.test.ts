@@ -11,18 +11,20 @@ describe("dsh collectDshTemplates", () => {
     expect(files.has(".dsh/skills/trellis-continue/SKILL.md")).toBe(true);
     expect(files.has(".dsh/skills/trellis-finish-work/SKILL.md")).toBe(true);
 
-    // Platform-resolved placeholders: get_context.py calls carry --platform dsh
+    // Start loads shared rules; step-specific continuation resolves the platform.
     const start = files.get(".dsh/skills/trellis-start/SKILL.md");
-    expect(start).toContain("--platform dsh");
+    expect(start).toContain(".trellis/workflow.md");
+    expect(files.get(".dsh/skills/trellis-continue/SKILL.md")).toContain(
+      "--platform dsh",
+    );
     expect(start).toContain("name: trellis-start");
   });
 
-  it("renders CMD_REF as bare trellis-<name> skill references in entry skills", () => {
+  it("routes finish through canonical acceptance rules", () => {
     const files = collectDshTemplates();
     const finish = files.get(".dsh/skills/trellis-finish-work/SKILL.md");
-    // `{{CMD_REF:finish-work}}` → `` `trellis-finish-work` `` (dsh loads
-    // skills by name through its skill-loader tool)
-    expect(finish).toContain("`trellis-finish-work`");
+    expect(finish).toContain("Phase 3 of `.trellis/workflow.md`");
+    expect(finish).not.toContain("{{CMD_REF:");
   });
 
   it("writes workflow + bundled skills to the shared .agents/skills/ root only", () => {

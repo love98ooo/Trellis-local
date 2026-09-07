@@ -1,3 +1,7 @@
+# Trellis-local
+
+面向个人与多个 worktree 的 [Trellis](https://github.com/mindfold-ai/Trellis) 轻量 fork。使用 `trellis-local`；内部 npm 包标识保留以减少上游合并差异，本项目不发布上游 npm 包。
+
 <p align="center">
 <picture>
 <source srcset="assets/trellis.png" media="(prefers-color-scheme: dark)">
@@ -8,7 +12,7 @@
 
 <p align="center">
 <strong>开箱即用的 AI 编码工程化框架</strong><br/>
-<sub>AI 写代码很快，但它每次会话都从零开始理解项目，记不住你的规范，也记不住团队级别的需求。Trellis 会把规范、任务、记忆沉淀进仓库，让任意 Coding Agent 都按你的工程标准来实践。</sub>
+<sub>AI 写代码很快，但它每次会话都从零开始理解项目，记不住你的规范，也记不住之前的需求。Trellis 在每个 worktree 本地保存规范、任务与记忆，让任意 Coding Agent 都按你的工程标准来实践。</sub>
 </p>
 
 <p align="center">
@@ -26,8 +30,8 @@
 <a href="https://github.com/mindfold-ai/Trellis/stargazers"><img src="https://img.shields.io/github/stars/mindfold-ai/Trellis?style=flat-square&color=eab308" alt="stars" /></a>
 <a href="https://docs.trytrellis.app/zh"><img src="https://img.shields.io/badge/docs-trytrellis.app-0f766e?style=flat-square" alt="docs" /></a>
 <a href="https://discord.com/invite/tWcCZ3aRHc"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
-<a href="https://github.com/mindfold-ai/Trellis/issues"><img src="https://img.shields.io/github/issues/mindfold-ai/Trellis?style=flat-square&color=e67e22" alt="open issues" /></a>
-<a href="https://github.com/mindfold-ai/Trellis/pulls"><img src="https://img.shields.io/github/issues-pr/mindfold-ai/Trellis?style=flat-square&color=9b59b6" alt="open PRs" /></a>
+<a href="https://github.com/love98ooo/Trellis-local/issues"><img src="https://img.shields.io/github/issues/mindfold-ai/Trellis?style=flat-square&color=e67e22" alt="open issues" /></a>
+<a href="https://github.com/love98ooo/Trellis-local/pulls"><img src="https://img.shields.io/github/issues-pr/mindfold-ai/Trellis?style=flat-square&color=9b59b6" alt="open PRs" /></a>
 <a href="https://deepwiki.com/mindfold-ai/Trellis"><img src="https://img.shields.io/badge/Ask-DeepWiki-blue?style=flat-square" alt="Ask DeepWiki" /></a>
 <a href="https://chatgpt.com/?q=Explain+the+project+mindfold-ai/Trellis+on+GitHub"><img src="https://img.shields.io/badge/Ask-ChatGPT-74aa9c?style=flat-square&logo=openai&logoColor=white" alt="Ask ChatGPT" /></a>
 </p>
@@ -36,117 +40,40 @@
 <img src="assets/trellis-demo-zh.gif" alt="Trellis 工作流演示" width="100%">
 </p>
 
-## 为什么用 Trellis？
+## 个人多 worktree 版本
 
-| 能力 | 带来的改变 |
-| --- | --- |
-| **自动注入规范** | 将规范沉淀到 `.trellis/spec/` 之后，Trellis 会在每次会话中按当前任务自动按需注入相关上下文，无需反复说明。 |
-| **任务驱动工作流** | PRD、实现上下文、审查上下文与任务状态统一存放于 `.trellis/tasks/`，AI 开发过程保持结构化、可追溯。 |
-| **项目记忆** | `.trellis/workspace/` 中的工作日志（journal）会保留上一次会话的脉络，因此每次新会话都能基于真实上下文开始。 |
-| **团队共享标准** | Spec 随仓库一同版本化，个人总结出的规则与流程可以直接成为整个团队的基础设施。 |
-| **多平台复用** | 同一套 Trellis 结构覆盖 22 个 AI coding 平台，无需为每个工具单独搭建工作流。 |
+保留 Codex、Claude、Cursor、Pi 与个人多 Agent 调度。每个 worktree 拥有独立任务、会话指针和日志；生成的 `.trellis/` 仅本地使用，沿用已有全局 ignore，不修改业务仓库 ignore，也不暂存或提交状态文件。Fork 源码及生成模板正常版本管理。
 
-## 前置要求
-
-- **Node.js** >= 18
-- **Python** >= 3.9
-
-## 快速开始
+需要 Node.js >= 18.17、Python >= 3.9 和 pnpm。在本 fork 源码目录执行一次：
 
 ```bash
-# 1. 安装 Trellis
-npm install -g @mindfoldhq/trellis@latest
-
-# 2. 在仓库中初始化
-trellis init -u your-name
-
-# 3. 或仅初始化你实际使用的平台
-trellis init --cursor --opencode --codex -u your-name
+pnpm local:install
 ```
 
-查看 [快速开始](https://docs.trytrellis.app/zh/start/install-and-first-task) 与 [支持平台](https://docs.trytrellis.app/zh/advanced/multi-platform) 指南以了解详细配置步骤。
+安装器自动构建、保存独立版本并创建 `~/.local/bin/trellis-local`，保留上游全局 `trellis`。初始化和存量迁移只需：
 
-## 如何使用
+```bash
+trellis-local init --yes --codex --claude --cursor --pi
+trellis-local update
+```
 
-使用流程非常简单：
+Paseo 使用同一初始化命令，不再传 `-u`。如需固定到某次构建，使用安装器输出的固定路径；上游全局升级不会影响它。只有再次执行 `pnpm local:install` 才切换本地命令，旧构建保留。存量更新会自动备份，冲突文件需审阅；不必每次先执行 `--dry-run`。
 
-1. **用自然语言描述你的需求。**
-2. **与 AI 一起头脑风暴**，一次只回答一个问题，直到 PRD 足够清晰，然后开始实现。
-3. **交由 AI 自主推进** —— AI 会调用 `trellis-implement` 编写代码，并自动依据 Spec、lint、type-check 与测试进行校验。
-4. **当工作完成或会话上下文接近上限时，输入 `/trellis:finish-work`**。Trellis 会归档任务并更新工作日志。
+小任务直接开发；复杂任务按需记录计划和设计。工作流规则统一位于 `.trellis/workflow.md`，平台 Skills 只负责加载和路由。已授权工作持续完成验证；未完成任务保留进展，不因会话结束归档。业务提交、MR、CI、合并与发布仍遵守目标仓库规范。
 
-## 工作原理
+日志位于 `.trellis/workspace/journal-N.md`。`add_session.py --commit` 仅引用已有业务提交，不产生提交。规范可以在初始化时从同仓库主 checkout 复制为独立快照；不共享整个 `.trellis/`。需要规范初始化时明确调用 `trellis-spec-bootstrap`。
 
-Trellis 内部运行一个 4 阶段循环，skill 与子代理均由系统自动调用：
+Codex 和 Pi 共用 `.agents/skills/`；Pi 的 Agent、extension 和 prompts 仍保留。旧 `.pi/skills/trellis-*` 由 init/update 迁移，避免重复发现同名 Skill；个人自定义内容应先备份和比较。
 
-1. **Plan（规划）** —— `trellis-brainstorm` 逐题梳理需求并写入 `prd.md`；涉及资料调研的部分派发给 `trellis-research` 子代理处理。阶段产出为一组精选的 Spec 与研究文件，由 `implement.jsonl` / `check.jsonl` 编排。
-2. **Implement（实现）** —— `trellis-implement` 子代理依据 PRD 编写代码，所需上下文已按 `implement.jsonl` 自动注入，不会执行 git commit。
-3. **Verify（验证）** —— `trellis-check` 子代理基于 diff 对照 Spec 逐项核查，并运行 lint、type-check 与测试，在能力范围内自动修复。
-4. **Finish（收尾）** —— 执行最终检查后，`trellis-update-spec` 将本轮新增的认知沉淀回 `.trellis/spec/`，为下一次会话积累上下文。
+本 fork 删除人员身份、人员任务分配、团队规范同步及状态自动提交。上游平台适配和安全修复仍可复用；init/update、任务 schema、工作流和 channel 隔离相关更新需逐项复核。
 
-## 资源
+可复跑的 context 基准和流程合同评估（不调用模型、不代表真实编码成功率）：
 
-| 需求 | 链接 |
-| --- | --- |
-| 在仓库中安装 Trellis | [快速开始](https://docs.trytrellis.app/zh/start/install-and-first-task) |
-| 了解各平台之间的差异 | [支持平台](https://docs.trytrellis.app/zh/advanced/multi-platform) |
-| 查看实际使用场景 | [真实场景](https://docs.trytrellis.app/zh/start/real-world-scenarios) |
-| 从 Spec 模板起步 | [Spec 模板](https://docs.trytrellis.app/zh/templates/specs-index) |
-| 跟进版本更新 | [更新日志](https://docs.trytrellis.app/zh/changelog) |
+```bash
+python3 packages/cli/scripts/benchmark-personal-workflow.py --baseline 88f4834449da9b4f607ec05e322408a0aa66f2ce --output /tmp/trellis-personal-benchmark
+```
 
-## 常见问题
-
-<details>
-<summary><strong>Trellis 与 <code>CLAUDE.md</code>、<code>AGENTS.md</code>、<code>.cursorrules</code> 有何区别？</strong></summary>
-
-这些文件本身是有用的入口，但容易在长期使用中变得冗长臃肿。Trellis 在此之上补充了：作用域明确的 Spec、按任务划分的 PRD、工作流关卡、工作区记忆，以及按平台自动生成的适配文件。
-
-</details>
-
-<details>
-<summary><strong>Trellis 是否仅支持 Claude Code？</strong></summary>
-
-并非如此。Trellis 是项目层基础设施，可在多种 coding agent 与 IDE 中使用。
-
-</details>
-
-<details>
-<summary><strong>Trellis 适合个人开发者还是团队？</strong></summary>
-
-两者皆可。个人开发者主要受益于记忆机制与可复用的工作流；团队使用收益更大——标准统一、任务边界清晰、上下文可审查，且具备跨平台可移植性。
-
-</details>
-
-<details>
-<summary><strong>是否需要手动编写每一个 Spec 文件？</strong></summary>
-
-并不需要。多数团队的做法是先由 AI 基于现有代码生成初稿，再人工收紧关键规则。Trellis 的效果取决于是否将高价值规则显式化并纳入版本管理。
-
-</details>
-
-<details>
-<summary><strong>团队协作时是否会频繁产生冲突？</strong></summary>
-
-不会。个人工作区的 journal 按开发者独立维护，共享的 Spec 与任务则进入仓库，可以像其他项目产物一样进行评审与改进。
-
-</details>
-
-<details>
-<summary><strong>可以临时对比启用与关闭 Trellis 的项目表现吗？</strong></summary>
-
-可以。`trellis ablate` 会先在项目外创建并验证恢复事务，然后临时移除
-Trellis 管理的全部项目级表面。请新开一个 agent 会话进行对比；完成后运行
-`trellis restore`，即可精确恢复到消融前的状态。两个命令都支持
-`--dry-run` 预览。
-私有恢复事务会包含 `.trellis` 中 task、spec 和 workspace 的精确字节，
-其中可能有用户编写的敏感文本；事务会保留到恢复完成验证为止。
-
-它不同于永久删除的 `trellis uninstall`，也不同于只关闭 hooks 的
-`TRELLIS_HOOKS=0`。消融不会启动 agent、管理 worktree、隐藏 Git 变更，
-也不会删除全局 CLI、channel 日志或宿主会话记录。如果消融期间某个受管理
-路径被修改，恢复会拒绝全部写入，直到冲突被处理。
-
-</details>
+[上游文档](https://docs.trytrellis.app/zh) 描述上游行为，与此个人版本存在差异。
 
 ## Star 历史
 
@@ -155,7 +82,7 @@ Trellis 管理的全部项目级表面。请新开一个 agent 会话进行对�
 ## 社区与资源
 
 - [官方文档](https://docs.trytrellis.app/zh)
-- [GitHub Issues](https://github.com/mindfold-ai/Trellis/issues)
+- [GitHub Issues](https://github.com/love98ooo/Trellis-local/issues)
 - [Discord](https://discord.com/invite/tWcCZ3aRHc)
 - [技术博客](https://docs.trytrellis.app/zh/blog)
 

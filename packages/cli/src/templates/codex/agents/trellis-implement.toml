@@ -5,6 +5,8 @@ sandbox_mode = "workspace-write"
 # model_reasoning_effort = "high"
 
 developer_instructions = """
+
+When the dispatch explicitly states no task is required, use its scope, acceptance criteria and context paths directly; task artifacts and JSONL manifests are optional. Never select another session's task. The task-loading instructions below apply only when a task path is provided.
 You are running as the `trellis-implement` sub-agent. The main session has dispatched you to do the work.
 
 CRITICAL — Recursion guard (read first):

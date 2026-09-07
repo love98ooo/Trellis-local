@@ -27,7 +27,6 @@ from .git import run_git
 from .packages_context import get_packages_section
 from .tasks import iter_active_tasks, load_task, get_all_statuses, children_progress
 from .paths import (
-    DIR_SCRIPTS,
     DIR_SPEC,
     DIR_TASKS,
     DIR_WORKFLOW,
@@ -36,7 +35,6 @@ from .paths import (
     get_active_journal_file,
     get_current_task,
     get_current_task_source,
-    get_developer,
     get_repo_root,
     get_tasks_dir,
 )
@@ -331,7 +329,7 @@ def _read_project_version(repo_root: Path) -> str | None:
 def _fetch_trellis_version_output() -> str | None:
     try:
         result = subprocess.run(
-            ["trellis", "--version"],
+            ["trellis-local", "--version"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -483,7 +481,7 @@ def get_update_hint(repo_root: Path, context_key: str | None = None) -> str | No
 
     return (
         f"Trellis update available: {current_version} -> {latest_version}, "
-        "run trellis update"
+        "run trellis-local update"
     )
 
 
@@ -503,16 +501,15 @@ def get_context_json(repo_root: Path | None = None) -> dict:
     if repo_root is None:
         repo_root = get_repo_root()
 
-    developer = get_developer(repo_root)
     tasks_dir = get_tasks_dir(repo_root)
     journal_file = get_active_journal_file(repo_root)
 
     journal_lines = 0
     journal_relative = ""
-    if journal_file and developer:
+    if journal_file:
         journal_lines = count_lines(journal_file)
         journal_relative = (
-            f"{DIR_WORKFLOW}/{DIR_WORKSPACE}/{developer}/{journal_file.name}"
+            f"{DIR_WORKFLOW}/{DIR_WORKSPACE}/{journal_file.name}"
         )
 
     root_git_info = _collect_root_git_info(repo_root)
@@ -535,8 +532,7 @@ def get_context_json(repo_root: Path | None = None) -> dict:
         discover_unconfigured=not root_git_info["isRepo"],
     )
 
-    result = {
-        "developer": developer or "",
+    result: dict = {
         "git": {
             "isRepo": root_git_info["isRepo"],
             "branch": root_git_info["branch"],
@@ -593,18 +589,6 @@ def get_context_text(repo_root: Path | None = None) -> str:
     lines.append("========================================")
     lines.append("")
 
-    developer = get_developer(repo_root)
-
-    # Developer section
-    lines.append("## DEVELOPER")
-    if not developer:
-        lines.append(
-            f"ERROR: Not initialized. Run: python3 ./{DIR_WORKFLOW}/{DIR_SCRIPTS}/init_developer.py <name>"
-        )
-        return "\n".join(lines)
-
-    lines.append(f"Name: {developer}")
-    lines.append("")
 
     root_git_info = _collect_root_git_info(repo_root)
     _append_root_git_context(lines, root_git_info)
@@ -660,7 +644,7 @@ def get_context_text(repo_root: Path | None = None) -> str:
         t = all_tasks[name]
         progress = children_progress(t.children, all_statuses)
         prefix = "  " * indent
-        lines.append(f"{prefix}- {name}/ ({t.status}){progress} @{t.assignee or '-'}")
+        lines.append(f"{prefix}- {name}/ ({t.status}){progress}")
         task_count += 1
         for child in t.children:
             if child in all_tasks:
@@ -675,26 +659,12 @@ def get_context_text(repo_root: Path | None = None) -> str:
     lines.append(f"Total: {task_count} active task(s)")
     lines.append("")
 
-    # My tasks
-    lines.append("## MY TASKS (Assigned to me)")
-    my_task_count = 0
-
-    for t in all_tasks.values():
-        if t.assignee == developer and t.status != "done":
-            progress = children_progress(t.children, all_statuses)
-            lines.append(f"- [{t.priority}] {t.title} ({t.status}){progress}")
-            my_task_count += 1
-
-    if my_task_count == 0:
-        lines.append("(no tasks assigned to you)")
-    lines.append("")
-
     # Journal file
     lines.append("## JOURNAL FILE")
     journal_file = get_active_journal_file(repo_root)
     if journal_file:
         journal_lines = count_lines(journal_file)
-        relative = f"{DIR_WORKFLOW}/{DIR_WORKSPACE}/{developer}/{journal_file.name}"
+        relative = f"{DIR_WORKFLOW}/{DIR_WORKSPACE}/{journal_file.name}"
         lines.append(f"Active file: {relative}")
         lines.append(f"Line count: {journal_lines} / 2000")
         if journal_lines > 1800:
@@ -711,7 +681,7 @@ def get_context_text(repo_root: Path | None = None) -> str:
 
     # Paths
     lines.append("## PATHS")
-    lines.append(f"Workspace: {DIR_WORKFLOW}/{DIR_WORKSPACE}/{developer}/")
+    lines.append(f"Workspace: {DIR_WORKFLOW}/{DIR_WORKSPACE}/")
     lines.append(f"Tasks: {DIR_WORKFLOW}/{DIR_TASKS}/")
     lines.append(f"Spec: {DIR_WORKFLOW}/{DIR_SPEC}/")
     lines.append("")
@@ -733,32 +703,30 @@ def get_context_record_json(repo_root: Path | None = None) -> dict:
     if repo_root is None:
         repo_root = get_repo_root()
 
-    developer = get_developer(repo_root)
     tasks_dir = get_tasks_dir(repo_root)
 
     root_git_info = _collect_root_git_info(repo_root)
 
-    # My tasks (single pass — collect statuses and filter by assignee)
+    # Active tasks
     all_tasks_list = list(iter_active_tasks(tasks_dir))
     all_statuses = {t.dir_name: t.status for t in all_tasks_list}
 
-    my_tasks = []
+    tasks = []
     for t in all_tasks_list:
-        if t.assignee == developer:
-            done = sum(
-                1 for c in t.children
-                if all_statuses.get(c) in ("completed", "done")
-            )
-            my_tasks.append({
-                "dir": t.dir_name,
-                "title": t.title,
-                "status": t.status,
-                "priority": t.priority,
-                "children": list(t.children),
-                "childrenDone": done,
-                "parent": t.parent,
-                "meta": t.meta,
-            })
+        done = sum(
+            1 for c in t.children
+            if all_statuses.get(c) in ("completed", "done")
+        )
+        tasks.append({
+            "dir": t.dir_name,
+            "title": t.title,
+            "status": t.status,
+            "priority": t.priority,
+            "children": list(t.children),
+            "childrenDone": done,
+            "parent": t.parent,
+            "meta": t.meta,
+        })
 
     # Current task
     current_task_info = None
@@ -781,8 +749,7 @@ def get_context_record_json(repo_root: Path | None = None) -> dict:
         discover_unconfigured=not root_git_info["isRepo"],
     )
 
-    result = {
-        "developer": developer or "",
+    result: dict = {
         "git": {
             "isRepo": root_git_info["isRepo"],
             "branch": root_git_info["branch"],
@@ -790,7 +757,7 @@ def get_context_record_json(repo_root: Path | None = None) -> dict:
             "uncommittedChanges": root_git_info["uncommittedChanges"],
             "recentCommits": root_git_info["recentCommits"],
         },
-        "myTasks": my_tasks,
+        "tasks": tasks,
         "currentTask": current_task_info,
     }
 
@@ -815,32 +782,24 @@ def get_context_text_record(repo_root: Path | None = None) -> str:
     lines.append("========================================")
     lines.append("")
 
-    developer = get_developer(repo_root)
-    if not developer:
-        lines.append(
-            f"ERROR: Not initialized. Run: python3 ./{DIR_WORKFLOW}/{DIR_SCRIPTS}/init_developer.py <name>"
-        )
-        return "\n".join(lines)
-
-    # MY ACTIVE TASKS — first and prominent
-    lines.append(f"## [!!!] MY ACTIVE TASKS (Assigned to {developer})")
+    # Active tasks
+    lines.append("## ACTIVE TASKS")
     lines.append("[!] Review whether any should be archived before recording this session.")
     lines.append("")
 
     tasks_dir = get_tasks_dir(repo_root)
-    my_task_count = 0
+    task_count = 0
 
-    # Single pass — collect all tasks and filter by assignee
+    # Single pass — collect all active tasks
     all_statuses = get_all_statuses(tasks_dir)
 
     for t in iter_active_tasks(tasks_dir):
-        if t.assignee == developer:
-            progress = children_progress(t.children, all_statuses)
-            lines.append(f"- [{t.priority}] {t.title} ({t.status}){progress} — {t.dir_name}")
-            my_task_count += 1
+        progress = children_progress(t.children, all_statuses)
+        lines.append(f"- [{t.priority}] {t.title} ({t.status}){progress} — {t.dir_name}")
+        task_count += 1
 
-    if my_task_count == 0:
-        lines.append("(no active tasks assigned to you)")
+    if task_count == 0:
+        lines.append("(no active tasks)")
     lines.append("")
 
     root_git_info = _collect_root_git_info(repo_root)

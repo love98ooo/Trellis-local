@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   TASK_RECORD_FIELD_ORDER,
@@ -18,6 +18,7 @@ describe("loadTaskRecord / writeTaskRecord", () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trellis-core-task-"));
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
@@ -29,14 +30,13 @@ describe("loadTaskRecord / writeTaskRecord", () => {
         id: "demo",
         name: "demo",
         title: "Demo",
-        assignee: "developer",
       }),
     });
     const raw = fs.readFileSync(path.join(dir, "task.json"), "utf-8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    expect(Object.keys(parsed).slice(0, TASK_RECORD_FIELD_ORDER.length)).toEqual([
-      ...TASK_RECORD_FIELD_ORDER,
-    ]);
+    expect(
+      Object.keys(parsed).slice(0, TASK_RECORD_FIELD_ORDER.length),
+    ).toEqual([...TASK_RECORD_FIELD_ORDER]);
     expect(raw.endsWith("\n")).toBe(true);
   });
 
@@ -46,7 +46,6 @@ describe("loadTaskRecord / writeTaskRecord", () => {
       id: "rt",
       name: "rt",
       title: "Round Trip",
-      assignee: "developer",
       branch: "feat/x",
     });
     writeTaskRecord({ taskDir: dir, record });
@@ -61,7 +60,7 @@ describe("loadTaskRecord / writeTaskRecord", () => {
       string,
       unknown
     >;
-    delete partial.assignee;
+    delete partial.title;
     fs.writeFileSync(
       path.join(dir, "task.json"),
       JSON.stringify(partial, null, 2) + "\n",
@@ -69,7 +68,7 @@ describe("loadTaskRecord / writeTaskRecord", () => {
     );
 
     expect(() => loadTaskRecord({ taskDir: dir })).toThrow(
-      /task.assignee is required/,
+      /task.title is required/,
     );
   });
 
@@ -117,6 +116,8 @@ describe("loadTaskRecord / writeTaskRecord", () => {
       // Simulate a field added by an external tool / future version.
       external_tracker: { id: "external-42", system: "external" },
       legacy_flag: true,
+      creator: "old-owner",
+      assignee: "old-owner",
     };
     fs.writeFileSync(
       path.join(dir, "task.json"),
@@ -144,6 +145,8 @@ describe("loadTaskRecord / writeTaskRecord", () => {
       system: "external",
     });
     expect(raw.legacy_flag).toBe(true);
+    expect(raw).not.toHaveProperty("creator");
+    expect(raw).not.toHaveProperty("assignee");
 
     // Canonical fields come first, unknown fields trail in original order.
     const keys = Object.keys(raw);
@@ -153,6 +156,24 @@ describe("loadTaskRecord / writeTaskRecord", () => {
       "external_tracker",
       "legacy_flag",
     ]);
+  });
+
+  it("preserves the original task when atomic replacement fails", () => {
+    const file = path.join(tmp, "task.json");
+    const record = emptyTaskRecord({ title: "original" });
+    writeTaskRecord({ taskDir: tmp, record });
+    const original = fs.readFileSync(file, "utf8");
+    vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw new Error("replacement failed");
+    });
+    expect(() =>
+      writeTaskRecord({
+        taskDir: tmp,
+        record: { ...record, title: "changed" },
+      }),
+    ).toThrow("replacement failed");
+    expect(fs.readFileSync(file, "utf8")).toBe(original);
+    expect(fs.readdirSync(tmp)).toEqual(["task.json"]);
   });
 
   it("refuses to overwrite corrupt existing task.json files", () => {

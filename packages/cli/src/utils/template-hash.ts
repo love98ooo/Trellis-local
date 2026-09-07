@@ -265,7 +265,6 @@ const EXCLUDE_FROM_HASH = [
   ".template-hashes.json", // Hash file itself
   ".version", // Version file
   ".gitignore", // Git ignore files
-  ".developer", // Developer identity file
   "workspace/", // Workspace files (user data)
   "tasks/", // Task files (user data)
   ".current-task", // Current task marker (file, not directory)

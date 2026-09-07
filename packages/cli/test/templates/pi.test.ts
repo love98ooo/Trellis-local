@@ -148,11 +148,7 @@ function loadMaxThinkingInternals(
 
 export { buildPiArgs, resolveRunCfg, splitModelThinking };
 `;
-  return evaluateExtension<MaxThinkingInternals>(
-    source,
-    process.cwd(),
-    {},
-  );
+  return evaluateExtension<MaxThinkingInternals>(source, process.cwd(), {});
 }
 
 function createMinimalTrellisRoot(): string {
@@ -225,7 +221,7 @@ describe("pi templates", () => {
     }
   });
 
-  it("collects a manual trellis-start prompt for Pi fallback bootstrap", () => {
+  it("collects manual Pi entries loading the canonical workflow", () => {
     const templates = collectPiTemplates();
 
     expect(templates.get(".pi/prompts/trellis-start.md")).toContain(
@@ -235,7 +231,7 @@ describe("pi templates", () => {
       "get_context.py --mode phase",
     );
     expect(templates.get(".pi/prompts/trellis-finish-work.md")).toContain(
-      "finish-work",
+      "Phase 3 of `.trellis/workflow.md`",
     );
   });
 
@@ -248,9 +244,7 @@ describe("pi templates", () => {
 
     // Schema must declare the three dispatch modes and the thinking enum so the LLM
     // can pick a valid mode and override thinking per call.
-    expect(extension).toContain(
-      'enum: ["single", "parallel", "chain"]',
-    );
+    expect(extension).toContain('enum: ["single", "parallel", "chain"]');
     expect(extension).toContain(
       'enum: ["off", "minimal", "low", "medium", "high", "xhigh", "max"]',
     );
@@ -343,7 +337,9 @@ describe("pi templates", () => {
     );
     expect(first.systemPrompt).toContain("<trellis-workflow>");
     expect(first.systemPrompt).toContain("Phase 1: Plan");
-    expect(first.systemPrompt).toContain("No active Trellis task found");
+    expect(first.systemPrompt).toContain(
+      "No active Trellis task. Follow .trellis/workflow.md",
+    );
     expect(first.systemPrompt).not.toContain("<workflow-state>");
     // The system prompt carries startup's session-overview snapshot.
     expect(first.systemPrompt).toContain("<session-overview>");
@@ -421,7 +417,9 @@ describe("pi templates", () => {
       };
 
     const first = fire();
-    expect(first.systemPrompt).toContain("No active Trellis task found");
+    expect(first.systemPrompt).toContain(
+      "No active Trellis task. Follow .trellis/workflow.md",
+    );
 
     // A task is created and activated mid-session.
     const taskDir = join(root, ".trellis", "tasks", "07-07-cache-fix");
@@ -435,7 +433,13 @@ describe("pi templates", () => {
       recursive: true,
     });
     writeFileSync(
-      join(root, ".trellis", ".runtime", "sessions", "pi_pi-unit-task-update.json"),
+      join(
+        root,
+        ".trellis",
+        ".runtime",
+        "sessions",
+        "pi_pi-unit-task-update.json",
+      ),
       JSON.stringify({ current_task: "tasks/07-07-cache-fix" }),
     );
 
@@ -535,7 +539,9 @@ describe("pi templates", () => {
         { type: "before_agent_start", systemPrompt: "BASE" },
         ctx,
       ) as { systemPrompt?: string; message?: { content?: string } };
-      expect(beforeAgentStart.systemPrompt).not.toContain("FOREIGN TASK CONTENT");
+      expect(beforeAgentStart.systemPrompt).not.toContain(
+        "FOREIGN TASK CONTENT",
+      );
       expect(beforeAgentStart.message?.content).not.toContain(
         "FOREIGN TASK CONTENT",
       );
@@ -752,7 +758,9 @@ fallbackModels:
     const { buildPiArgs } = loadExtensionInternals();
 
     // model + thinking → composes "model:thinking" suffix when not already present
-    expect(buildPiArgs({ model: "anthropic/claude-sonnet-4", thinking: "high" })).toEqual([
+    expect(
+      buildPiArgs({ model: "anthropic/claude-sonnet-4", thinking: "high" }),
+    ).toEqual([
       "--mode",
       "json",
       "-p",
@@ -813,7 +821,15 @@ fallbackModels:
       fallbackModels: [],
     };
     const dogfoodExtension = readFileSync(
-      join(process.cwd(), "..", "..", ".pi", "extensions", "trellis", "index.ts"),
+      join(
+        process.cwd(),
+        "..",
+        "..",
+        ".pi",
+        "extensions",
+        "trellis",
+        "index.ts",
+      ),
       "utf-8",
     );
 
@@ -1154,9 +1170,7 @@ describe("pi extension: context injection limits (issue #441)", () => {
       mkdirSync(join(root, ".trellis"), { recursive: true });
       writeConfig(
         root,
-        ["context_injection:", "  max_artifact_bytes: not-a-number"].join(
-          "\n",
-        ),
+        ["context_injection:", "  max_artifact_bytes: not-a-number"].join("\n"),
       );
       const { readContextInjectionLimits } = loadExtensionInternals();
       expect(readContextInjectionLimits(root).max_artifact_bytes).toBe(65536);
@@ -1225,13 +1239,11 @@ describe("pi extension: context injection limits (issue #441)", () => {
     it("does not misclassify legitimate multi-byte UTF-8 content as binary", () => {
       const root = createRoot();
       const taskDir = activateTask(root, "task-utf8-not-binary");
-      const multiByteContent =
-        "emoji: 🎉🚀 cjk: 中文测试 bmp: café naïve\n";
+      const multiByteContent = "emoji: 🎉🚀 cjk: 中文测试 bmp: café naïve\n";
       writeFileSync(join(root, "multibyte.md"), multiByteContent, "utf-8");
       writeFileSync(
         join(taskDir, "implement.jsonl"),
-        JSON.stringify({ file: "multibyte.md", reason: "unicode spec" }) +
-          "\n",
+        JSON.stringify({ file: "multibyte.md", reason: "unicode spec" }) + "\n",
         "utf-8",
       );
       writeConfig(root, "");
@@ -1270,7 +1282,11 @@ describe("pi extension: context injection limits (issue #441)", () => {
     it("truncates an oversized jsonl-referenced file at max_file_bytes with a notice", () => {
       const root = createRoot();
       const taskDir = activateTask(root, "task-oversize");
-      writeFileSync(join(root, "big.txt"), "A".repeat(2 * 1024 * 1024), "utf-8");
+      writeFileSync(
+        join(root, "big.txt"),
+        "A".repeat(2 * 1024 * 1024),
+        "utf-8",
+      );
       writeFileSync(
         join(taskDir, "implement.jsonl"),
         JSON.stringify({ file: "big.txt", reason: "big" }) + "\n",

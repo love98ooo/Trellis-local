@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,7 +31,7 @@ export interface WriteTaskRecordOptions {
 /**
  * Read a task.json file and return a canonicalized record.
  *
- * Unknown fields on disk that are not part of the canonical 24-field
+ * Unknown fields on disk that are not part of the canonical
  * shape are NOT returned — `loadTaskRecord` is the structured public API.
  * To preserve unknown fields across a load/write cycle, callers should
  * use {@link writeTaskRecord}, which merges canonical updates on top of
@@ -77,14 +78,20 @@ export function writeTaskRecord(options: WriteTaskRecordOptions): void {
   }
   if (existing) {
     for (const key of Object.keys(existing)) {
-      if (!(key in out)) {
+      if (!(key in out) && key !== "creator" && key !== "assignee") {
         out[key] = existing[key];
       }
     }
   }
 
   const json = JSON.stringify(out, null, 2) + "\n";
-  fs.writeFileSync(file, json, "utf-8");
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, json, { encoding: "utf-8", flag: "wx" });
+    fs.renameSync(temporary, file);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
 }
 
 function readExistingObject(file: string): Record<string, unknown> | null {

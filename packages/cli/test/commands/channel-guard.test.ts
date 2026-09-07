@@ -561,7 +561,7 @@ describe("scanLiveWorkers + enforceSpawnBudget (integration)", () => {
     });
     expect(msg).toContain("Live worker budget exhausted");
     expect(msg).toContain("channel='c5'");
-    expect(msg).toContain("trellis channel kill");
+    expect(msg).toContain("trellis-local channel kill");
     expect(msg).toContain("--max-live-workers");
   });
 

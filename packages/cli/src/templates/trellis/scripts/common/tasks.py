@@ -52,7 +52,6 @@ def load_task(task_dir: Path) -> TaskInfo | None:
         directory=task_dir,
         title=data.get("title") or data.get("name") or "unknown",
         status=data.get("status", "unknown"),
-        assignee=data.get("assignee", ""),
         priority=data.get("priority", "P2"),
         children=tuple(data.get("children", [])),
         parent=data.get("parent"),

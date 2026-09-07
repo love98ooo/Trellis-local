@@ -17,7 +17,6 @@ export interface ThreadState {
   title?: string;
   status: string;
   labels: string[];
-  assignees: string[];
   description?: string;
   context?: ContextEntry[];
   summary?: string;
@@ -77,8 +76,7 @@ export function buildThreadAliasResolver(
     if (oldCurrent === targetCurrent) continue;
 
     // Migrate the alias group rooted at `oldCurrent` onto `targetCurrent`.
-    const movingAliases =
-      aliasesByCurrent.get(oldCurrent) ?? new Set<string>();
+    const movingAliases = aliasesByCurrent.get(oldCurrent) ?? new Set<string>();
     movingAliases.add(oldCurrent);
     aliasesByCurrent.delete(oldCurrent);
 
@@ -113,7 +111,6 @@ export function reduceThreads(events: ChannelEvent[]): ThreadState[] {
       thread: key,
       status: "open",
       labels: [],
-      assignees: [],
       lastSeq: seq,
       comments: 0,
       aliases: [],
@@ -167,14 +164,15 @@ export function reduceThreads(events: ChannelEvent[]): ThreadState[] {
         ...(state.title !== undefined ? { title: state.title } : {}),
         status: state.status,
         labels: state.labels,
-        assignees: state.assignees,
         ...(state.description !== undefined
           ? { description: state.description }
           : {}),
         ...(context !== undefined ? { context } : {}),
         ...(state.summary !== undefined ? { summary: state.summary } : {}),
         ...(state.openedAt !== undefined ? { openedAt: state.openedAt } : {}),
-        ...(state.updatedAt !== undefined ? { updatedAt: state.updatedAt } : {}),
+        ...(state.updatedAt !== undefined
+          ? { updatedAt: state.updatedAt }
+          : {}),
         lastSeq: state.lastSeq,
         comments: state.comments,
         aliases,
@@ -206,7 +204,6 @@ function applyThreadAction(
         }
       }
       current.labels = asStringArray(ev.labels) ?? current.labels;
-      current.assignees = asStringArray(ev.assignees) ?? current.assignees;
       return;
     case "comment":
       current.comments += 1;
@@ -216,9 +213,6 @@ function applyThreadAction(
       return;
     case "labels":
       current.labels = asStringArray(ev.labels) ?? current.labels;
-      return;
-    case "assignees":
-      current.assignees = asStringArray(ev.assignees) ?? current.assignees;
       return;
     case "summary":
       if (typeof ev.summary === "string") current.summary = ev.summary;

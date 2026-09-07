@@ -5,6 +5,8 @@ description: |
   and self-fixes issues. Dispatch via spawn_subagent with subagent_type
   trellis-check; first prompt line must be Active task: <path>.
 ---
+
+When the dispatch explicitly states no task is required, use its scope, acceptance criteria and context paths directly; task artifacts and JSONL manifests are optional. Never select another session's task. The task-loading instructions below apply only when a task path is provided.
 # Check Agent
 
 You are the Check Agent in the Trellis workflow.

@@ -1,6 +1,6 @@
 # Local Multi-Agent Channel Runtime
 
-`trellis channel` is the local multi-agent collaboration runtime shipped with the Trellis CLI. It lets the main AI session spawn peer workers (Claude Code, Codex, or any agent definition under `.trellis/agents/`), exchange durable messages through an event log, and coordinate review or brainstorm loops without hand-stitching shell pipelines.
+`trellis-local channel` is the local multi-agent collaboration runtime shipped with the Trellis CLI. It lets the main AI session spawn peer workers (Claude Code, Codex, or any agent definition under `.trellis/agents/`), exchange durable messages through an event log, and coordinate review or brainstorm loops without hand-stitching shell pipelines.
 
 This reference covers how channels are wired into the user project so an AI customizing the project knows what to edit. For runtime usage (commands, forum/thread patterns, worker spawn flags), defer to the bundled `trellis-channel` capability skill.
 
@@ -9,7 +9,7 @@ This reference covers how channels are wired into the user project so an AI cust
 The channel runtime spans three local surfaces:
 
 1. **Storage layer** in the user's home directory: durable event logs and worker state files.
-2. **Agent definitions** inside the project at `.trellis/agents/`: platform-agnostic role cards consumed by `trellis channel spawn --agent <name>`.
+2. **Agent definitions** inside the project at `.trellis/agents/`: platform-agnostic role cards consumed by `trellis-local channel spawn --agent <name>`.
 3. **Project configuration** in `.trellis/config.yaml`: worker guard thresholds and other channel knobs.
 
 ## Core Paths
@@ -40,7 +40,7 @@ Prefer cheaper primitives when:
 
 - A single-shot Bash command or single Agent tool call is enough -> do that directly.
 - The user just needs a static review against a file -> read the file and reply inline.
-- The need is "remember what we discussed last week" -> use `trellis mem` instead of a channel.
+- The need is "remember what we discussed last week" -> use `trellis-local mem` instead of a channel.
 
 ## Customization Points
 
@@ -48,9 +48,9 @@ Prefer cheaper primitives when:
 | --- | --- |
 | Change default channel worker idle timeout | `channel.worker_guard.idle_timeout` in `.trellis/config.yaml`. Accepts `5m`, `30s`, etc. Set `0` to disable idle cleanup. |
 | Change live worker budget | `channel.worker_guard.max_live_workers` in `.trellis/config.yaml`. Set `0` to disable the spawn-time budget check. |
-| Override worker guard per spawn | Pass `--idle-timeout` / `--max-live-workers` on `trellis channel spawn`, or set `TRELLIS_CHANNEL_WORKER_IDLE_TIMEOUT` / `TRELLIS_CHANNEL_MAX_LIVE_WORKERS` in the environment. |
+| Override worker guard per spawn | Pass `--idle-timeout` / `--max-live-workers` on `trellis-local channel spawn`, or set `TRELLIS_CHANNEL_WORKER_IDLE_TIMEOUT` / `TRELLIS_CHANNEL_MAX_LIVE_WORKERS` in the environment. |
 | Change what the default Check or Implement worker does | Edit `.trellis/agents/check.md` or `.trellis/agents/implement.md`. These are platform-agnostic role cards; the channel runtime injects them when `--agent check|implement` is passed. |
-| Add a new role card | Drop `<name>.md` into `.trellis/agents/`. `trellis channel spawn --agent <name>` will pick it up. |
+| Add a new role card | Drop `<name>.md` into `.trellis/agents/`. `trellis-local channel spawn --agent <name>` will pick it up. |
 | Relocate channel storage (CI sandbox, ephemeral runs) | Set `TRELLIS_CHANNEL_ROOT=/path/to/dir`. Channel events move with it; existing channels stay at the old root. |
 | Switch storage scope | Pass `--scope project` (default) or `--scope global` on every channel subcommand. The bucket directory changes; nothing else does. |
 
@@ -58,7 +58,7 @@ Precedence for the worker guard is: CLI flag > environment variable > `.trellis/
 
 ## Relationship To Other Local Layers
 
-- **Workflow layer**: workflows that use channel dispatch (such as `channel-driven-subagent-dispatch`) instruct the main agent to call `trellis channel spawn --agent check` or `--agent implement` instead of a platform sub-agent. If `.trellis/agents/check.md` or `implement.md` is missing, `trellis workflow --template <id>` prints a non-blocking warning at install time. Restore them with `trellis update` if they are deleted by accident.
+Personal Agent dispatch uses `trellis-local channel spawn --agent check` or `--agent implement`; `trellis-local update` restores missing bundled Agent definitions.
 - **Task layer**: channel workers do not own task state. The supervising main session passes the active task path through the worker inbox; the worker resolves task artifacts from disk.
 - **Spec layer**: workers read `.trellis/spec/` the same way the main session does. Channel runtime does not bypass spec context loading.
 - **Platform integration layer**: channel runtime is platform-neutral. It does not depend on `.claude/`, `.codex/`, or any other platform directory. The adapters that normalize provider output (Claude `stream-json`, Codex `app-server`) live inside the Trellis CLI binary, not in the project.
@@ -66,4 +66,4 @@ Precedence for the worker guard is: CLI flag > environment variable > `.trellis/
 
 ## Runtime Usage
 
-For command syntax, forum/thread patterns, worker handles, progress inspection, and the `--kind done` / `--kind turn_finished` dispatcher wait pattern, load the bundled `trellis-channel` skill (auto-installed under each platform's skills directory after `trellis init` / `trellis update`). This reference only covers the local file layout and customization knobs; it does not duplicate command syntax that may change between releases.
+For command syntax, forum/thread patterns, worker handles, progress inspection, and the `--kind done` / `--kind turn_finished` dispatcher wait pattern, load the bundled `trellis-channel` skill (auto-installed under each platform's skills directory after `trellis-local init` / `trellis-local update`). This reference only covers the local file layout and customization knobs; it does not duplicate command syntax that may change between releases.

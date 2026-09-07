@@ -1,6 +1,6 @@
 # Local Files Generated After Init
 
-`trellis init` writes the Trellis runtime into the user project. Later, `trellis update` tries to update Trellis-managed template files, but it uses `.trellis/.template-hashes.json` to determine which files have already been modified by the user.
+`trellis-local init` writes the Trellis runtime into the user project. Later, `trellis-local update` tries to update Trellis-managed template files, but it uses `.trellis/.template-hashes.json` to determine which files have already been modified by the user.
 
 This page only describes files that are visible and editable inside the user project.
 
@@ -10,7 +10,6 @@ This page only describes files that are visible and editable inside the user pro
 .trellis/
 ├── workflow.md
 ├── config.yaml
-├── .developer
 ├── .version
 ├── .template-hashes.json
 ├── .runtime/
@@ -29,7 +28,6 @@ This page only describes files that are visible and editable inside the user pro
 | `.trellis/workspace/` | Yes | Session records, usually written by `add_session.py`. |
 | `.trellis/scripts/` | Carefully | Local runtime. It can be customized, but only after understanding the call chain. |
 | `.trellis/.runtime/` | No | Runtime state, usually written automatically by hooks/scripts. |
-| `.trellis/.developer` | Carefully | Current developer identity. |
 | `.trellis/.version` | No | Trellis version record used by update/migration logic. |
 | `.trellis/.template-hashes.json` | No | Template hash record. Do not hand-write business rules here. |
 
@@ -49,7 +47,7 @@ When modifying a platform directory, also confirm whether `.trellis/workflow.md`
 
 ## Meaning Of Template Hashes
 
-`.trellis/.template-hashes.json` records the content hash from the last time Trellis wrote a template file. `trellis update` uses it to distinguish three cases:
+`.trellis/.template-hashes.json` records the content hash from the last time Trellis wrote a template file. `trellis-local update` uses it to distinguish three cases:
 
 | Case | Update behavior |
 | --- | --- |

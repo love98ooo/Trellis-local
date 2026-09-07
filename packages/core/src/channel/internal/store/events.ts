@@ -2,12 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 
 import { withLock } from "./lock.js";
-import {
-  channelDir,
-  eventsPath,
-  lockPath,
-  seqSidecarPath,
-} from "./paths.js";
+import { channelDir, eventsPath, lockPath, seqSidecarPath } from "./paths.js";
 import { reconcileSeq, truncateIncompleteTail, writeSidecar } from "./seq.js";
 import type {
   ChannelType,
@@ -155,7 +150,6 @@ export interface ThreadChannelEvent extends BaseChannelEvent<"thread"> {
   description?: string;
   status?: string;
   labels?: string[];
-  assignees?: string[];
   summary?: string;
   context?: ContextEntry[];
   /** Legacy alias on old event logs. */
@@ -245,23 +239,20 @@ export type InterruptOutcome =
 /** Why a message could not be delivered to a targeted worker. */
 export type UndeliverableReason = "worker-terminal" | "worker-unknown";
 
-export interface UndeliverableChannelEvent
-  extends BaseChannelEvent<"undeliverable"> {
+export interface UndeliverableChannelEvent extends BaseChannelEvent<"undeliverable"> {
   targetWorker: string;
   messageSeq: number;
   reason: UndeliverableReason;
 }
 
-export interface InterruptRequestedChannelEvent
-  extends BaseChannelEvent<"interrupt_requested"> {
+export interface InterruptRequestedChannelEvent extends BaseChannelEvent<"interrupt_requested"> {
   worker: string;
   turnId?: string;
   reason?: InterruptReason;
   message?: string;
 }
 
-export interface TurnStartedChannelEvent
-  extends BaseChannelEvent<"turn_started"> {
+export interface TurnStartedChannelEvent extends BaseChannelEvent<"turn_started"> {
   worker: string;
   /**
    * Durable link to the channel `message` event seq that initiated this
@@ -272,16 +263,14 @@ export interface TurnStartedChannelEvent
   turnId?: string;
 }
 
-export interface TurnFinishedChannelEvent
-  extends BaseChannelEvent<"turn_finished"> {
+export interface TurnFinishedChannelEvent extends BaseChannelEvent<"turn_finished"> {
   worker: string;
   inputSeq?: number;
   turnId?: string;
   outcome?: "done" | "error" | "aborted";
 }
 
-export interface InterruptedChannelEvent
-  extends BaseChannelEvent<"interrupted"> {
+export interface InterruptedChannelEvent extends BaseChannelEvent<"interrupted"> {
   worker: string;
   turnId?: string;
   reason?: InterruptReason;
@@ -298,8 +287,7 @@ export type SupervisorWarningReason = "approaching_timeout";
  * Not part of {@link MEANINGFUL_EVENT_KINDS} so plain `wait` does not
  * wake on it; explicit `--kind supervisor_warning` does match.
  */
-export interface SupervisorWarningChannelEvent
-  extends BaseChannelEvent<"supervisor_warning"> {
+export interface SupervisorWarningChannelEvent extends BaseChannelEvent<"supervisor_warning"> {
   worker: string;
   reason: SupervisorWarningReason;
   timeout_ms: number;
@@ -525,9 +513,7 @@ export async function readChannelEvents(
 
   const { afterSeq, beforeSeq, limit } = pagination;
   if (afterSeq !== undefined && beforeSeq !== undefined) {
-    throw new Error(
-      "readChannelEvents: pass only one of afterSeq / beforeSeq",
-    );
+    throw new Error("readChannelEvents: pass only one of afterSeq / beforeSeq");
   }
   if (limit !== undefined && (!Number.isInteger(limit) || limit < 0)) {
     throw new Error("readChannelEvents: limit must be a non-negative integer");
@@ -548,7 +534,5 @@ export async function readChannelEvents(
   }
 
   // limit only: latest N events in ascending seq order.
-  return limit !== undefined
-    ? all.slice(Math.max(0, all.length - limit))
-    : all;
+  return limit !== undefined ? all.slice(Math.max(0, all.length - limit)) : all;
 }

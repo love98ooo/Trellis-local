@@ -14,7 +14,7 @@ skill-loader tool.
 ## Quick start
 
 ```bash
-trellis init --dsh -u your-name
+trellis-local init --dsh -u your-name
 dsh web        # or: dsh --profile headless "start a Trellis task for ..."
 ```
 

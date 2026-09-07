@@ -17,7 +17,6 @@ export type ThreadAction =
   | "comment"
   | "status"
   | "labels"
-  | "assignees"
   | "summary"
   | "processed"
   | "rename";
@@ -63,7 +62,6 @@ export const THREAD_ACTIONS: ReadonlySet<ThreadAction> = new Set([
   "comment",
   "status",
   "labels",
-  "assignees",
   "summary",
   "processed",
   "rename",
@@ -196,9 +194,7 @@ export function asStringArray(value: unknown): string[] | undefined {
   return value.filter((item) => typeof item === "string") as string[];
 }
 
-export function asContextEntries(
-  value: unknown,
-): ContextEntry[] | undefined {
+export function asContextEntries(value: unknown): ContextEntry[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const entries = value.filter((entry): entry is ContextEntry => {
     if (!entry || typeof entry !== "object") return false;

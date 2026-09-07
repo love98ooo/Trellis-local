@@ -385,22 +385,6 @@ def _validate_jsonl(jsonl_file: Path, repo_root: Path, task_dir: Path | None = N
                 )
                 print(f"  {colored(warning_message, Colors.YELLOW)}")
 
-    if errors == 0 and real_entries == 0:
-        # Seed-only / empty manifest: sub-agents dispatched for this task
-        # would run with zero spec context (#573). Silent-green here is how
-        # more than half the tasks in the report ended up uncurated.
-        action = file_name.split(".", 1)[0]
-        print(
-            f"  {colored(f'{file_name}: ✗ (0 curated entries — sub-agents would get zero spec context)', Colors.RED)}"
-        )
-        print(
-            f"    Curate it:  python3 .trellis/scripts/task.py add-context <task> {action} <path> \"<why>\""
-        )
-        print(
-            "    Intentionally empty? Bypass at start: task.py start <task> --allow-empty-context"
-        )
-        return 1
-
     if errors == 0:
         print(f"  {colored(f'{file_name}: ✓ ({real_entries} entries)', Colors.GREEN)}")
     else:

@@ -187,7 +187,7 @@ audit for beta markers against the root release tree.
 **Real-world example**: Codex inline mode changed workflow platform markers from
 `[Codex]` / `[Kilo, Antigravity, Windsurf]` to `[codex-sub-agent]` /
 `[codex-inline, Kilo, Antigravity, Windsurf]`. Fresh init was correct, but
-`trellis update` only merged `[workflow-state:*]` blocks and preserved stale
+`trellis-local update` only merged `[workflow-state:*]` blocks and preserved stale
 markers outside those blocks. Result: upgraded projects got new hook scripts
 but old workflow routing, so `get_context.py --mode phase --platform codex`
 could return empty Phase 2.1 detail.
@@ -257,7 +257,7 @@ against both fresh init and upgrade paths.
 **Real-world example**: Codex inline mode changed workflow platform markers from
 `[Codex]` / `[Kilo, Antigravity, Windsurf]` to `[codex-sub-agent]` /
 `[codex-inline, Kilo, Antigravity, Windsurf]`. Fresh init was correct, but
-`trellis update` only merged `[workflow-state:*]` blocks and preserved stale
+`trellis-local update` only merged `[workflow-state:*]` blocks and preserved stale
 markers outside those blocks. Result: upgraded projects got new hook scripts
 but old workflow routing, so `get_context.py --mode phase --platform codex`
 could return empty Phase 2.1 detail.

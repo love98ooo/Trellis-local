@@ -21,19 +21,9 @@ describe("validateTaskDirName", () => {
     });
   });
 
-  it("accepts Trellis system onboarding task names", () => {
-    expect(validateTaskDirName("00-bootstrap-guidelines")).toEqual({
-      prefix: "00",
-      month: null,
-      day: null,
-      slug: "bootstrap-guidelines",
-    });
-    expect(validateTaskDirName("00-join-new-developer")).toEqual({
-      prefix: "00",
-      month: null,
-      day: null,
-      slug: "join-new-developer",
-    });
+  it("rejects removed system onboarding task names", () => {
+    expect(validateTaskDirName("00-bootstrap-guidelines")).toBeNull();
+    expect(validateTaskDirName("00-join-new-developer")).toBeNull();
   });
 
   it("rejects invalid months and days", () => {

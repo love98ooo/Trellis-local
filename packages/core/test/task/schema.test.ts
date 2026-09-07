@@ -29,12 +29,10 @@ describe("emptyTaskRecord", () => {
       id: "demo",
       name: "demo",
       title: "Demo task",
-      assignee: "developer",
       package: "core",
     });
     expect(record.id).toBe("demo");
     expect(record.title).toBe("Demo task");
-    expect(record.assignee).toBe("developer");
     expect(record.package).toBe("core");
     expect(record.priority).toBe("P2");
   });
@@ -72,7 +70,9 @@ describe("taskRecordSchema", () => {
   });
 
   it("rejects non-object inputs", () => {
-    expect(() => taskRecordSchema.parse("nope")).toThrow(/must be a JSON object/);
+    expect(() => taskRecordSchema.parse("nope")).toThrow(
+      /must be a JSON object/,
+    );
     expect(() => taskRecordSchema.parse(null)).toThrow();
     expect(() => taskRecordSchema.parse([])).toThrow();
   });

@@ -15,7 +15,7 @@ Task lifecycle includes creation, start, context configuration, finish, archive,
 
 | Need | Edit point |
 | --- | --- |
-| Automatically sync an external system after task creation | `hooks.after_create` in `.trellis/config.yaml`. |
+| Run a local tool after task creation | `hooks.after_create` in `.trellis/config.yaml`. |
 | Automatically update status after task start | `hooks.after_start` in `.trellis/config.yaml`. |
 | Run a script after task finish | `hooks.after_finish` in `.trellis/config.yaml`. |
 | Clean external resources after archive | `hooks.after_archive` in `.trellis/config.yaml`. |
@@ -30,14 +30,16 @@ Task lifecycle includes creation, start, context configuration, finish, archive,
 ```yaml
 hooks:
   after_create:
-    - "python3 .trellis/scripts/hooks/my_sync.py create"
+    - "python3 .trellis/scripts/hooks/my_local_tool.py create"
   after_start:
-    - "python3 .trellis/scripts/hooks/my_sync.py start"
+    - "python3 .trellis/scripts/hooks/my_local_tool.py start"
   after_finish:
-    - "python3 .trellis/scripts/hooks/my_sync.py finish"
+    - "python3 .trellis/scripts/hooks/my_local_tool.py finish"
   after_archive:
-    - "python3 .trellis/scripts/hooks/my_sync.py archive"
+    - "python3 .trellis/scripts/hooks/my_local_tool.py archive"
 ```
+
+Hooks are explicit local automation; never use them to stage, commit or synchronize generated `.trellis/` state.
 
 Hook commands receive the `TASK_JSON_PATH` environment variable, pointing to the current task's `task.json`. Hook failures should usually warn, but not block the main task operation.
 
@@ -49,7 +51,6 @@ Example:
 
 ```json
 "meta": {
-  "linearIssue": "ENG-123",
   "risk": "high"
 }
 ```

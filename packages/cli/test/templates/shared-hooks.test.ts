@@ -23,9 +23,7 @@ const EMPTY_EXCEPT_PASS_RE = /except[^\n]*:\n\s*pass\s*$/m;
 describe("shared-hooks capability table", () => {
   it("every capability-table entry names a real shared-hook file", () => {
     const realFiles = new Set(getSharedHookScripts().map((h) => h.name));
-    for (const [platform, hooks] of Object.entries(
-      SHARED_HOOKS_BY_PLATFORM,
-    )) {
+    for (const [platform, hooks] of Object.entries(SHARED_HOOKS_BY_PLATFORM)) {
       for (const hook of hooks) {
         expect(
           realFiles.has(hook),
@@ -51,9 +49,7 @@ describe("shared-hooks capability table", () => {
   it("statusline.py is not distributed by default", () => {
     const realFiles = new Set(getSharedHookScripts().map((h) => h.name));
     expect(realFiles.has("statusline.py")).toBe(false);
-    for (const [platform, hooks] of Object.entries(
-      SHARED_HOOKS_BY_PLATFORM,
-    )) {
+    for (const [platform, hooks] of Object.entries(SHARED_HOOKS_BY_PLATFORM)) {
       expect(
         (hooks as readonly string[]).includes("statusline.py"),
         `${platform} must not install the generated statusline.py hook by default`,
@@ -65,9 +61,7 @@ describe("shared-hooks capability table", () => {
     // Codex uses SubagentStart.additionalContext; these remaining platforms
     // are class-2 and load their context from an agent-definition prelude.
     const class2 = new Set(["copilot", "gemini", "qoder", "trae"]);
-    for (const [platform, hooks] of Object.entries(
-      SHARED_HOOKS_BY_PLATFORM,
-    )) {
+    for (const [platform, hooks] of Object.entries(SHARED_HOOKS_BY_PLATFORM)) {
       const has = hooks.includes("inject-subagent-context.py");
       if (class2.has(platform))
         expect(
@@ -95,10 +89,7 @@ describe("shared-hooks capability table", () => {
   // instead of silently shipping a script nothing calls. Never hard-code the
   // platform list here; that is the failure mode this test exists to prevent.
   describe("shared hooks are registered in each platform's own hook config", () => {
-    function registrationsOf(
-      platform: string,
-      hook: SharedHookName,
-    ): string[] {
+    function registrationsOf(platform: string, hook: SharedHookName): string[] {
       const tool = resolveCliFlag(platform);
       if (!tool) {
         throw new Error(
@@ -218,13 +209,19 @@ describe("shared-hooks capability table", () => {
     const sessionStart = getSharedHookScripts().find(
       (h) => h.name === "session-start.py",
     );
-    expect(sessionStart, "session-start.py is missing from shared-hooks/").toBeDefined();
+    expect(
+      sessionStart,
+      "session-start.py is missing from shared-hooks/",
+    ).toBeDefined();
     const content = sessionStart ? sessionStart.content : "";
     expect(content).toContain("<trellis-workflow>");
     expect(content).toContain("Task context order");
     expect(content).toContain("jsonl entries -> `prd.md`");
-    expect(content).toContain("Lightweight task can request start review with PRD-only");
-    expect(content).toContain("complex task must add");
+    expect(content).toContain(
+      "workflow.md owns all planning and approval rules",
+    );
+    expect(content).not.toContain("complex task must add");
+    expect(content).not.toContain("task-creation consent");
     expect(content).not.toContain("Status: READY");
     expect(content).not.toContain("<workflow>");
   });

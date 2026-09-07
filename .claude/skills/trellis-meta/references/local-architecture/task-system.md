@@ -20,7 +20,7 @@ The Trellis task system is stored entirely under `.trellis/tasks/` in the user p
 
 | File | Purpose |
 | --- | --- |
-| `task.json` | Task metadata: status, assignee, priority, branch, parent/child tasks, and similar fields. |
+| `task.json` | Task metadata: status, priority, branch, parent/child tasks, and similar fields. |
 | `prd.md` | Requirements, constraints, and acceptance criteria. Lightweight tasks may be PRD-only. |
 | `design.md` | Technical design for complex tasks: boundaries, contracts, data flow, compatibility, tradeoffs. |
 | `implement.md` | Execution plan for complex tasks: ordered checklist, validation commands, review gates, rollback points. |
@@ -37,7 +37,6 @@ The Trellis task system is stored entirely under `.trellis/tasks/` in the user p
 | `id` / `name` / `title` | Task identity and title. |
 | `status` | Status such as `planning`, `in_progress`, `review`, or `completed`. |
 | `priority` | `P0`, `P1`, `P2`, `P3`. |
-| `creator` / `assignee` | Creator and assignee. |
 | `package` | Target package in a monorepo; may be empty. |
 | `branch` / `base_branch` | Working branch and PR target branch. |
 | `children` / `parent` | Parent/child task relationships. |
@@ -103,6 +102,8 @@ Rules:
 - Do not treat temporary conclusions in chat as the only context.
 - Rows without a `file` field are skipped by readers. Legacy `{"_example": ...}` placeholder rows are rejected by `task.py validate` — delete them.
 
+Artifacts and JSONL manifests are optional according to actual work; they are not a fixed readiness quota. `complete --reason` stores acceptance evidence in `meta.completion_reason`; archive accepts only a completed task with that evidence. These operations never stage or commit files.
+
 ## Common Commands
 
 ```bash
@@ -112,6 +113,7 @@ python3 ./.trellis/scripts/task.py current --source
 python3 ./.trellis/scripts/task.py add-context <task> implement <file> <reason>
 python3 ./.trellis/scripts/task.py validate <task>
 python3 ./.trellis/scripts/task.py finish
+python3 ./.trellis/scripts/task.py complete <task> --reason "Acceptance evidence"
 python3 ./.trellis/scripts/task.py archive <task>
 ```
 

@@ -51,11 +51,7 @@ vi.mock("giget", async () => {
 // === Imports ===
 
 import { init } from "../../src/commands/init.js";
-import {
-  update,
-  classifyMigrations,
-  executeMigrations,
-} from "../../src/commands/update.js";
+import { update } from "../../src/commands/update.js";
 import { VERSION } from "../../src/constants/version.js";
 import { DIR_NAMES, FILE_NAMES, PATHS } from "../../src/constants/paths.js";
 import { computeHash } from "../../src/utils/template-hash.js";
@@ -69,8 +65,6 @@ import {
 import {
   replacePythonCommandLiterals,
   resolveSkills,
-  resolveSkillsNeutral,
-  resolveAllAsSkillsNeutral,
   resolveBundledSkills,
   collectSkillTemplates,
 } from "../../src/configurators/shared.js";
@@ -372,103 +366,31 @@ describe("update() integration", () => {
     );
   });
 
-  it("[issue-447] 0.6.8 rename-dir migration moves legacy .pi/skills/ into shared .agents/skills/ even when Codex already installed the shared root", async () => {
-    // Simulate a pre-0.6.8 project: Pi + Codex both installed. Pre-fix Pi
-    // wrote its own Pi-flavored copy under `.pi/skills/` (via resolveSkills,
-    // not resolveSkillsNeutral), while Codex already wrote the shared,
-    // neutral `.agents/skills/` root. Reproduces the #447 repro shape.
-    //
-    // This exercises classifyMigrations()/executeMigrations() directly
-    // (like the existing "rename-dir ownership gate" tests in
-    // update-internals.test.ts) rather than the full update() CLI flow,
-    // because the 0.6.8 manifest only becomes "pending" once the CLI's own
-    // package.json version reaches 0.6.8 — a release-time bump orthogonal to
-    // this bug fix.
+  it("[issue-447] retires verified Pi duplicates while preserving custom skills across migrate and repeated update", async () => {
     await init({ yes: true, force: true, pi: true, codex: true });
-
-    // `.agents/skills/` now holds the correct, neutral, current-version
-    // content (written by both Codex and current Pi in current code).
-    const neutralContent = readProjectFile(
-      ".agents/skills/trellis-update-spec/SKILL.md",
-    );
-
-    // Fabricate the pre-fix `.pi/skills/` leftover with Pi-flavored bytes
-    // (old pi.ts used resolveSkills(ctx), not resolveSkillsNeutral(ctx)).
-    const piCtx = AI_TOOLS.pi.templateContext;
-    const legacyPiSkillFiles = collectSkillTemplates(
+    const canonical = ".agents/skills/trellis-update-spec/SKILL.md";
+    const neutral = readProjectFile(canonical);
+    const legacyFiles = collectSkillTemplates(
       ".pi/skills",
-      resolveSkills(piCtx),
-      resolveBundledSkills(piCtx),
+      resolveSkills(AI_TOOLS.pi.templateContext),
+      resolveBundledSkills(AI_TOOLS.pi.templateContext),
     );
-
-    const legacyContent = legacyPiSkillFiles.get(
-      ".pi/skills/trellis-update-spec/SKILL.md",
-    );
-    expect(legacyContent).toBeDefined();
-    // Sanity: the Pi-flavored bytes actually differ from the shared neutral
-    // bytes already on disk (otherwise this test wouldn't be exercising the
-    // reported bug at all).
-    expect(legacyContent).not.toBe(neutralContent);
-
     const hashes = readHashesV2(hashFilePath());
-    for (const [relativePath, content] of legacyPiSkillFiles) {
+    for (const [relativePath, content] of legacyFiles) {
       writeProjectFile(relativePath, content);
       hashes[relativePath] = computeHash(content);
     }
     writeHashesV2(hashFilePath(), hashes);
-
-    expect(fs.existsSync(projectFile(".pi/skills/trellis-update-spec"))).toBe(
-      true,
-    );
+    const custom = ".pi/skills/my-personal-skill/SKILL.md";
+    writeProjectFile(custom, "# Keep my skill\n");
+    writeProjectFile(`${DIR_NAMES.WORKFLOW}/.version`, "0.6.7");
+    await update({ force: true, migrate: true });
+    await update({ force: true, migrate: true });
+    expect(readProjectFile(custom)).toBe("# Keep my skill\n");
     expect(
-      fs.existsSync(projectFile(".agents/skills/trellis-update-spec")),
-    ).toBe(true);
-
-    // Build the current-version templates map for `.agents/skills/` the way
-    // both real writers (Codex, Pi) produce it — mirrors what update()'s
-    // collectTemplateFiles() would assemble for this project.
-    const codexCtx = AI_TOOLS.codex.templateContext;
-    const currentTemplates = new Map<string, string>([
-      ...collectSkillTemplates(
-        ".agents/skills",
-        resolveAllAsSkillsNeutral(codexCtx),
-        resolveBundledSkills(codexCtx),
-      ),
-      ...collectSkillTemplates(
-        ".agents/skills",
-        resolveSkillsNeutral(piCtx),
-        resolveBundledSkills(piCtx),
-      ),
-    ]);
-
-    const migrationItem = {
-      type: "rename-dir" as const,
-      from: ".pi/skills",
-      to: ".agents/skills",
-    };
-    const finalHashes = readHashesV2(hashFilePath());
-    const classified = classifyMigrations(
-      [migrationItem],
-      tmpDir,
-      finalHashes,
-      currentTemplates,
-    );
-
-    // The merged 0.6.8 migration must resolve this automatically — not
-    // punt to the user as an unresolved conflict.
-    expect(classified.conflict).toHaveLength(0);
-    expect(classified.auto).toHaveLength(1);
-
-    await executeMigrations(classified, tmpDir, { force: true, skipAll: false }, currentTemplates);
-
-    // No duplicate/leftover `.pi/skills/` directory should survive.
-    expect(fs.existsSync(projectFile(".pi/skills"))).toBe(false);
-
-    // `.agents/skills/` must end up with the correct, current, neutral
-    // content — not the stale Pi-flavored bytes from the deleted legacy dir.
-    expect(
-      readProjectFile(".agents/skills/trellis-update-spec/SKILL.md"),
-    ).toBe(neutralContent);
+      fs.existsSync(projectFile(".pi/skills/trellis-update-spec/SKILL.md")),
+    ).toBe(false);
+    expect(readProjectFile(canonical)).toBe(neutral);
   });
 
   it("#2 dry run makes no file changes even when changes exist", async () => {
@@ -485,10 +407,14 @@ describe("update() integration", () => {
       readHashesV2(hashFile),
       MANAGED_FILE,
     ) as Record<string, string>;
+    hashes[".pi/skills/my-custom/SKILL.md"] = "orphan-receipt";
     writeHashesV2(hashFile, hashes);
+    const beforeHashes = fs.readFileSync(hashFile, "utf8");
     fs.unlinkSync(target);
 
     await update({ dryRun: true });
+
+    expect(fs.readFileSync(hashFile, "utf8")).toBe(beforeHashes);
 
     // File should still be missing (dry run didn't recreate it)
     expect(fs.existsSync(target)).toBe(false);
@@ -787,8 +713,10 @@ describe("update() integration", () => {
     // Set project version to future
     const versionPath = path.join(tmpDir, DIR_NAMES.WORKFLOW, ".version");
     fs.writeFileSync(versionPath, "99.99.99");
+    writeProjectFile(".trellis/.developer", "name=personal\n");
 
     await update({});
+    expect(readProjectFile(".trellis/.developer")).toBe("name=personal\n");
 
     // Version should NOT be changed
     expect(fs.readFileSync(versionPath, "utf-8")).toBe("99.99.99");
@@ -880,7 +808,7 @@ describe("update() integration", () => {
     // sub-agent-less platforms are added, and this assertion is about the
     // block surviving the update, not about who is currently in it.
     expect(readProjectFile(PATHS.WORKFLOW_GUIDE_FILE)).toContain(
-      "[codex-inline, Kilo, Antigravity, Devin",
+      "single source of workflow rules",
     );
     expect(readProjectFile(PATHS.WORKFLOW_GUIDE_FILE)).not.toContain("[Codex]");
 
@@ -890,8 +818,8 @@ describe("update() integration", () => {
     expect(updatedConfig).toContain(
       "Local 0.5.10 config customization that must survive update.",
     );
-    expect(updatedConfig).toContain("Session Auto-Commit");
-    expect(updatedConfig).toContain("session_auto_commit: true");
+    expect(updatedConfig).not.toContain("Session Auto-Commit");
+    expect(updatedConfig).not.toContain("session_auto_commit: true");
 
     // User-modified template files are skipped under skipAll and their hashes
     // are not rewritten to bless the local modification as a template.
@@ -911,7 +839,7 @@ describe("update() integration", () => {
 
     // User customizes a spec guides file
     const guidesIndex = path.join(tmpDir, PATHS.SPEC, "guides", "index.md");
-    expect(fs.existsSync(guidesIndex)).toBe(true);
+    fs.mkdirSync(path.dirname(guidesIndex), { recursive: true });
     const customContent = "# My Custom Guides\n\nEdited by user.\n";
     fs.writeFileSync(guidesIndex, customContent);
 
@@ -935,7 +863,7 @@ describe("update() integration", () => {
     expect(fs.existsSync(specDir)).toBe(false);
   });
 
-  it("#14b registry-backed pristine spec is refreshed by update", async () => {
+  it("#14b update does not refresh previously registry-backed specs", async () => {
     await setupProject();
 
     const specFile = `${PATHS.SPEC}/index.md`;
@@ -965,12 +893,12 @@ describe("update() integration", () => {
 
     await update({ force: true });
 
-    expect(readProjectFile(specFile)).toBe("# remote spec v2\n");
+    expect(readProjectFile(specFile)).toBe("# remote spec v1\n");
     expect(readHashesV2(hashFilePath())[specFile]).toBe(
-      computeHash("# remote spec v2\n"),
+      computeHash("# remote spec v1\n"),
     );
-    expect(readProjectFile(`${DIR_NAMES.WORKFLOW}/config.yaml`)).toContain(
-      "source: gitlab:local/registry/spec",
+    expect(readProjectFile(`${DIR_NAMES.WORKFLOW}/config.yaml`)).not.toContain(
+      "registry:",
     );
   });
 
@@ -1010,7 +938,7 @@ describe("update() integration", () => {
     );
   });
 
-  it("#14d registry-backed marketplace template spec is refreshed by update", async () => {
+  it("#14d update does not refresh previously imported marketplace specs", async () => {
     await setupProject();
 
     const specFile = `${PATHS.SPEC}/index.md`;
@@ -1054,9 +982,9 @@ describe("update() integration", () => {
 
     await update({ force: true });
 
-    expect(readProjectFile(specFile)).toBe("# golang spec v2\n");
+    expect(readProjectFile(specFile)).toBe("# golang spec v1\n");
     expect(readHashesV2(hashFilePath())[specFile]).toBe(
-      computeHash("# golang spec v2\n"),
+      computeHash("# golang spec v1\n"),
     );
   });
 
@@ -1086,16 +1014,11 @@ describe("update() integration", () => {
     expect(fs.existsSync(targetPath)).toBe(true);
   });
 
-  it("#15a backfills .gitattributes journal merge=union rule when missing (#415)", async () => {
+  it("#15a update never creates repository Git policy", async () => {
     await setupProject();
-
-    const gitattributesPath = path.join(tmpDir, ".gitattributes");
-    fs.rmSync(gitattributesPath, { force: true });
-
     await update({ force: true });
-
-    const content = fs.readFileSync(gitattributesPath, "utf-8");
-    expect(content).toContain(".trellis/workspace/*/journal-*.md merge=union");
+    expect(fs.existsSync(path.join(tmpDir, ".gitattributes"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, ".trellis/.gitignore"))).toBe(false);
   });
 
   it("#15b does not duplicate an existing user journal merge=union rule (#415)", async () => {
@@ -1567,13 +1490,7 @@ describe("update() integration", () => {
 
     const updated = fs.readFileSync(workflowPath, "utf-8");
     expect(updated).toBe(replacePythonCommandLiterals(workflowMdTemplate));
-    expect(updated).toContain(
-      "[Gemini, Qoder, Copilot, Reasonix, Trae, Grok, Kimi Code]",
-    );
-    expect(updated).toContain(
-      "[/Claude Code, Cursor, OpenCode, codex-sub-agent, CodeBuddy, Droid, Pi, ZCode, Snow, Oh My Pi]",
-    );
-    expect(updated).toContain("[codex-inline, Kilo, Antigravity, Devin");
+    expect(updated).toContain("single source of workflow rules");
     expect(updated).not.toContain("[Codex]");
     expect(updated).not.toContain("[Kilo, Antigravity, Windsurf]");
     expect(updated).not.toContain("legacy body");
@@ -1700,7 +1617,7 @@ describe("update() integration", () => {
       for (const relativePath of MIXED_OWNERSHIP) {
         if (before[relativePath] === undefined) continue;
         // The recorded hash must still describe the template, not the file.
-        expect(after[relativePath]).not.toBe(
+        expect(after[relativePath], relativePath).not.toBe(
           computeHash(readProjectFile(relativePath)),
         );
       }

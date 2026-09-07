@@ -5,6 +5,12 @@ description: "Bootstrap project-specific Trellis coding specs with a platform-ne
 
 # Trellis Spec Bootstrap
 
+Invoke only for an explicit spec-initialization request or a concrete task that needs new guidance; initialization alone never triggers it.
+
+Invoke only for an explicit spec-initialization request or a concrete task that needs new guidance; initialization alone never triggers it.
+
+Invoke only for an explicit spec-initialization request or a concrete task that needs new guidance; initialization alone never triggers it.
+
 Use this skill to create or refresh `.trellis/spec/` guidelines from the real codebase. One capable agent owns the full loop: analyze the repository, choose the spec boundaries, write the docs, and verify the result. The workflow does not depend on a specific host, CLI, or agent brand.
 
 ## Workflow

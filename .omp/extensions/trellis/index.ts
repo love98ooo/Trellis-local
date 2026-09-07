@@ -245,7 +245,7 @@ function resolveActiveTaskStatus(
 
    // Same jail the jsonl-referenced files already go through below. `task.py`
    // now refuses to store a ref that leaves the project, but a session file
-   // written before that fix can still hold one, and `trellis update` does not
+   // written before that fix can still hold one, and `trellis-local update` does not
    // rewrite session files — so a poisoned pointer outlives the upgrade that
    // closed the writer.
    const taskDir = resolveProjectFile(projectRoot, currentTask, resolveTrustedRoots(projectRoot));

@@ -468,7 +468,7 @@ export class TrellisContext {
    *
    * A task ref is not always something the user typed. `task.py` now refuses
    * to store one that leaves the project, but a session file written before
-   * that fix can still hold one, and `trellis update` does not rewrite session
+   * that fix can still hold one, and `trellis-local update` does not rewrite session
    * files — so a poisoned pointer outlives the upgrade that closed the writer.
    * Both sides are resolved so a task directory symlinked outside is refused
    * too, but the original `candidate` is returned on success: callers build

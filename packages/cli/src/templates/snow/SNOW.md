@@ -15,7 +15,7 @@ Snow is a **class-1** Trellis host: auto context inject + project agent discover
 ## Quick start
 
 ```bash
-trellis init --snow -u your-name
+trellis-local init --snow -u your-name
 snow
 ```
 

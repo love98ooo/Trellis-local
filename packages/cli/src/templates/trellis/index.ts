@@ -11,7 +11,7 @@
  *   │   ├── common/           # Shared utilities (Python)
  *   │   └── *.py              # Main scripts (Python)
  *   ├── agents/                # Channel runtime agent definitions
- *   │   └── *.md               # Loaded by `trellis channel spawn --agent <name>`
+ *   │   └── *.md               # Loaded by `trellis-local channel spawn --agent <name>`
  *   ├── scripts-shell-archive/ # Archived shell scripts (for reference)
  *   ├── workflow.md           # Workflow guide
  *   ├── config.yaml            # Trellis configuration
@@ -36,7 +36,6 @@ export const scriptsInit = readTemplate("scripts/__init__.py");
 // Python scripts - common
 export const commonInit = readTemplate("scripts/common/__init__.py");
 export const commonPaths = readTemplate("scripts/common/paths.py");
-export const commonDeveloper = readTemplate("scripts/common/developer.py");
 export const commonGitContext = readTemplate("scripts/common/git_context.py");
 export const commonTaskQueue = readTemplate("scripts/common/task_queue.py");
 export const commonTaskUtils = readTemplate("scripts/common/task_utils.py");
@@ -62,11 +61,8 @@ export const commonWorkflowPhase = readTemplate(
 export const commonTrellisConfig = readTemplate(
   "scripts/common/trellis_config.py",
 );
-export const commonSafeCommit = readTemplate("scripts/common/safe_commit.py");
 
 // Python scripts - main
-export const getDeveloperScript = readTemplate("scripts/get_developer.py");
-export const initDeveloperScript = readTemplate("scripts/init_developer.py");
 export const taskScript = readTemplate("scripts/task.py");
 export const getContextScript = readTemplate("scripts/get_context.py");
 export const addSessionScript = readTemplate("scripts/add_session.py");
@@ -74,13 +70,11 @@ export const addSessionScript = readTemplate("scripts/add_session.py");
 // Configuration files
 export const workflowMdTemplate = readTemplate("workflow.md");
 export const configYamlTemplate = readTemplate("config.yaml");
-export const gitignoreTemplate = readTemplate("gitignore.txt");
-export const gitattributesTemplate = readTemplate("gitattributes.txt");
 
 // Channel runtime agent definitions (loaded by
 // `packages/cli/src/commands/channel/agent-loader.ts` from `.trellis/agents/`).
-// These are platform-agnostic Trellis runtime files dispatched at `trellis init`
-// and refreshed by `trellis update`.
+// These are platform-agnostic Trellis runtime files dispatched at `trellis-local init`
+// and refreshed by `trellis-local update`.
 export const implementAgentTemplate = readTemplate("agents/implement.md");
 export const checkAgentTemplate = readTemplate("agents/check.md");
 
@@ -96,7 +90,6 @@ export function getAllScripts(): Map<string, string> {
   // Common
   scripts.set("common/__init__.py", commonInit);
   scripts.set("common/paths.py", commonPaths);
-  scripts.set("common/developer.py", commonDeveloper);
   scripts.set("common/git_context.py", commonGitContext);
   scripts.set("common/task_queue.py", commonTaskQueue);
   scripts.set("common/task_utils.py", commonTaskUtils);
@@ -114,11 +107,8 @@ export function getAllScripts(): Map<string, string> {
   scripts.set("common/packages_context.py", commonPackagesContext);
   scripts.set("common/workflow_phase.py", commonWorkflowPhase);
   scripts.set("common/trellis_config.py", commonTrellisConfig);
-  scripts.set("common/safe_commit.py", commonSafeCommit);
 
   // Main
-  scripts.set("get_developer.py", getDeveloperScript);
-  scripts.set("init_developer.py", initDeveloperScript);
   scripts.set("task.py", taskScript);
   scripts.set("get_context.py", getContextScript);
   scripts.set("add_session.py", addSessionScript);
@@ -130,8 +120,8 @@ export function getAllScripts(): Map<string, string> {
  * Get all channel runtime agent definitions as a map of relative path
  * (under `.trellis/agents/`) to content.
  *
- * Consumed by `trellis init` (to dispatch on first install) and by
- * `trellis update` (to backfill missing files and surface conflicts on edited
+ * Consumed by `trellis-local init` (to dispatch on first install) and by
+ * `trellis-local update` (to backfill missing files and surface conflicts on edited
  * ones via the standard hash machinery).
  */
 export function getAllAgents(): Map<string, string> {

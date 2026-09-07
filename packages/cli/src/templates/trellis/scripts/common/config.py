@@ -19,9 +19,7 @@ from .trellis_config import parse_simple_yaml
 
 
 # Defaults
-DEFAULT_SESSION_COMMIT_MESSAGE = "chore: record journal"
 DEFAULT_MAX_JOURNAL_LINES = 2000
-DEFAULT_SESSION_AUTO_COMMIT = True
 DEFAULT_CODEX_DISPATCH_MODE = "auto"
 
 CONFIG_FILE = "config.yaml"
@@ -99,12 +97,6 @@ def _load_config(repo_root: Path | None = None) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def get_session_commit_message(repo_root: Path | None = None) -> str:
-    """Get the commit message for auto-committing session records."""
-    config = _load_config(repo_root)
-    return config.get("session_commit_message", DEFAULT_SESSION_COMMIT_MESSAGE)
-
-
 def get_max_journal_lines(repo_root: Path | None = None) -> int:
     """Get the maximum lines per journal file."""
     config = _load_config(repo_root)
@@ -113,28 +105,6 @@ def get_max_journal_lines(repo_root: Path | None = None) -> int:
         return int(value)
     except (ValueError, TypeError):
         return DEFAULT_MAX_JOURNAL_LINES
-
-
-def get_session_auto_commit(repo_root: Path | None = None) -> bool:
-    """Whether scripts should auto-stage + auto-commit session/task changes.
-
-    Governs both ``add_session.py:_auto_commit_workspace`` and
-    ``task_store.py:_auto_commit_archive``.
-
-    Default: ``True`` (existing behavior — auto-stage + auto-commit).
-    Set ``session_auto_commit: false`` in ``.trellis/config.yaml`` to skip
-    auto-staging entirely; the journal/archive files are still written to
-    disk, but the user manages ``git add`` / ``git commit`` themselves.
-
-    Accepts native YAML booleans (``true`` / ``false``) and the string
-    aliases ``true / false / yes / no / 1 / 0 / on / off`` (case-insensitive).
-    Invalid values fall back to ``True`` with a stderr warning.
-    """
-    config = _load_config(repo_root)
-    raw = config.get("session_auto_commit", DEFAULT_SESSION_AUTO_COMMIT)
-    return coerce_config_bool(
-        raw, DEFAULT_SESSION_AUTO_COMMIT, "session_auto_commit"
-    )
 
 
 def get_codex_dispatch_mode(repo_root: Path | None = None) -> str:

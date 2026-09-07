@@ -27,38 +27,26 @@ from pathlib import Path
 from .config import (
     get_codex_dispatch_mode,
     get_packages,
-    get_session_auto_commit,
     is_monorepo,
     resolve_package,
     validate_package,
 )
 from .git import (
-    INDEX_LOCK_RETRY_ATTEMPTS,
     branch_exists_locally,
     has_git_remote,
-    index_lock_path,
     resolve_default_branch,
     run_git,
-    run_git_retry_index_lock,
-    stderr_indicates_index_lock,
 )
 from .io import describe_json_read_failure, read_json_checked, write_json
 from .log import Colors, colored
 from .paths import (
-    DEVELOPER_HINT,
     DIR_ARCHIVE,
     DIR_TASKS,
     DIR_WORKFLOW,
     FILE_TASK_JSON,
     generate_task_date_prefix,
-    get_developer,
     get_repo_root,
     get_tasks_dir,
-)
-from .safe_commit import (
-    print_gitignore_warning,
-    safe_archive_paths_to_add,
-    safe_git_add,
 )
 from .task_utils import (
     archive_destination_for,
@@ -341,19 +329,7 @@ def cmd_create(args: argparse.Namespace) -> int:
         # Inferred: default_package → None (no task.json yet for create)
         package = resolve_package(repo_root=repo_root)
 
-    # Default assignee to current developer
-    assignee = args.assignee
-    if not assignee:
-        assignee = get_developer(repo_root)
-        if not assignee:
-            print(colored("Error: No developer set. Run init_developer.py first or use --assignee", Colors.RED), file=sys.stderr)
-            print(DEVELOPER_HINT, file=sys.stderr)
-            return 1
-
     ensure_tasks_dir(repo_root)
-
-    # Get current developer as creator
-    creator = get_developer(repo_root) or assignee
 
     # Generate slug if not provided. A title-derived slug is sanitized by
     # _slugify; an explicit --slug is not, so reject the characters that would
@@ -501,8 +477,6 @@ def cmd_create(args: argparse.Namespace) -> int:
         "scope": None,
         "package": package,
         "priority": args.priority,
-        "creator": creator,
-        "assignee": assignee,
         "createdAt": today,
         "completedAt": None,
         "branch": None,
@@ -651,11 +625,11 @@ def cmd_create(args: argparse.Namespace) -> int:
     print(colored("Next steps:", Colors.BLUE), file=sys.stderr)
     print("  - Fill prd.md with requirements and acceptance criteria", file=sys.stderr)
     print("  - Lightweight task: PRD-only is valid", file=sys.stderr)
-    print("  - Complex task: add design.md and implement.md before task.py start", file=sys.stderr)
+    print("  - Add design or implementation notes only when needed", file=sys.stderr)
     if created_jsonl:
         print(
             "  - Curate implement.jsonl / check.jsonl (created empty) as spec/research "
-            "manifests before task.py start when sub-agents need context:",
+            "manifests when sub-agents need context:",
             file=sys.stderr,
         )
         print(
@@ -1280,94 +1254,89 @@ def cmd_archive(args: argparse.Namespace) -> int:
     dir_name = task_dir.name
     task_json_path = task_dir / FILE_TASK_JSON
 
-    # Update status before archiving
+    data, reason = read_json_checked(task_json_path)
+    if data is None:
+        _report_read_failure(task_json_path, reason)
+        return 1
+    meta = data.get("meta")
+    completion_reason = meta.get("completion_reason") if isinstance(meta, dict) else None
+    if (
+        data.get("status") not in ("completed", "done")
+        or not isinstance(completion_reason, str)
+        or not strip_blank(completion_reason)
+    ):
+        print("Error: complete the task with `task.py complete <task> --reason <verification>` before archiving.", file=sys.stderr)
+        return 1
+
+    # Update the completion date and relationships before moving.
     today = datetime.now().strftime("%Y-%m-%d")
-    # Names of child task dirs whose task.json gets modified below; passed
-    # into safe_archive_paths_to_add so they're staged in this commit.
-    modified_children: list[str] = []
-    if task_json_path.is_file():
-        data, read_reason = read_json_checked(task_json_path)
-        if data is None:
-            # Archiving is still the right outcome for a task whose task.json
-            # is broken — but say so, or the missing "completed" status looks
-            # like the archive silently did half its job.
-            problem, _ = describe_json_read_failure(task_json_path, read_reason)
-            print(
-                colored(
-                    f"Warning: {problem}; archiving without updating status/children.",
-                    Colors.YELLOW,
-                ),
-                file=sys.stderr,
-            )
-        else:
-            # Before any mutation: branch metadata is unrecoverable once the
-            # task leaves the active tree. Stale branches only warn.
-            if not _validate_branch_metadata(
-                data,
-                task_name,
-                repo_root,
-                getattr(args, "skip_branch_validation", False),
-            ):
-                print(
-                    f"Not archived: {_repo_relative_path(task_dir, repo_root)} is unchanged.",
-                    file=sys.stderr,
-                )
-                return 1
+    # Before any mutation: branch metadata is unrecoverable once the
+    # task leaves the active tree. Stale branches only warn.
+    if not _validate_branch_metadata(
+        data,
+        task_name,
+        repo_root,
+        getattr(args, "skip_branch_validation", False),
+    ):
+        print(
+            f"Not archived: {_repo_relative_path(task_dir, repo_root)} is unchanged.",
+            file=sys.stderr,
+        )
+        return 1
 
-            data["status"] = "completed"
-            data["completedAt"] = today
-            if not write_json(task_json_path, data):
-                _report_write_failure(task_json_path)
-                print(
-                    f"Not archived: {_repo_relative_path(task_dir, repo_root)} is unchanged. "
-                    "Archiving a task still marked in progress would hide it from `list` "
-                    "with the wrong status.",
-                    file=sys.stderr,
-                )
-                return 1
+    data["status"] = "completed"
+    data["completedAt"] = today
+    if not write_json(task_json_path, data):
+        _report_write_failure(task_json_path)
+        print(
+            f"Not archived: {_repo_relative_path(task_dir, repo_root)} is unchanged. "
+            "Archiving a task still marked in progress would hide it from `list` "
+            "with the wrong status.",
+            file=sys.stderr,
+        )
+        return 1
 
-            # Handle subtask relationships on archive.
-            # Keep this task in its parent's children list so progress
-            # counters (children_progress) stay consistent — children
-            # missing from the active set are treated as completed.
-            task_children = data.get("children", [])
+    # Handle subtask relationships on archive.
+    # Keep this task in its parent's children list so progress
+    # counters (children_progress) stay consistent — children
+    # missing from the active set are treated as completed.
+    task_children = data.get("children", [])
 
-            # If this is a parent, clear parent field in all children
-            if task_children:
-                for child_name in task_children:
-                    child_dir_path = find_task_by_name(child_name, tasks_dir)
-                    if child_dir_path:
-                        child_json = child_dir_path / FILE_TASK_JSON
-                        if child_json.is_file():
-                            child_data, child_reason = read_json_checked(child_json)
-                            if child_data is None:
-                                problem, _ = describe_json_read_failure(child_json, child_reason)
-                                print(
-                                    colored(
-                                        f"Warning: {problem}; child '{child_dir_path.name}' "
-                                        "keeps its parent reference.",
-                                        Colors.YELLOW,
-                                    ),
-                                    file=sys.stderr,
-                                )
-                                continue
-                            child_data["parent"] = None
-                            if not write_json(child_json, child_data):
-                                # Stop before the move: a child pointing at a
-                                # parent that has left .trellis/tasks/ is a
-                                # dangling reference nothing repairs later.
-                                # Retrying is safe — every step so far is
-                                # idempotent.
-                                _report_write_failure(child_json)
-                                print(
-                                    f"Not archived: {_repo_relative_path(task_dir, repo_root)} is "
-                                    f"marked completed but stays in place because child "
-                                    f"'{child_dir_path.name}' could not be unlinked. "
-                                    "Fix the child, then run archive again.",
-                                    file=sys.stderr,
-                                )
-                                return 1
-                            modified_children.append(child_dir_path.name)
+    # If this is a parent, clear parent field in all children
+    if task_children:
+        for child_name in task_children:
+            child_dir_path = find_task_by_name(child_name, tasks_dir)
+            if child_dir_path:
+                child_json = child_dir_path / FILE_TASK_JSON
+                if child_json.is_file():
+                    child_data, child_reason = read_json_checked(child_json)
+                    if child_data is None:
+                        problem, _ = describe_json_read_failure(child_json, child_reason)
+                        print(
+                            colored(
+                                f"Warning: {problem}; child '{child_dir_path.name}' "
+                                "keeps its parent reference.",
+                                Colors.YELLOW,
+                            ),
+                            file=sys.stderr,
+                        )
+                        continue
+                    child_data["parent"] = None
+                    if not write_json(child_json, child_data):
+                        # Stop before the move: a child pointing at a
+                        # parent that has left .trellis/tasks/ is a
+                        # dangling reference nothing repairs later.
+                        # Retrying is safe — every step so far is
+                        # idempotent.
+                        _report_write_failure(child_json)
+                        print(
+                            f"Not archived: {_repo_relative_path(task_dir, repo_root)} is "
+                            f"marked completed but stays in place because child "
+                            f"'{child_dir_path.name}' could not be unlinked. "
+                            "Fix the child, then run archive again.",
+                            file=sys.stderr,
+                        )
+                        return 1
 
     # Clear any session that still points at this task before the path moves.
     from .active_task import clear_task_from_sessions
@@ -1380,19 +1349,6 @@ def cmd_archive(args: argparse.Namespace) -> int:
         year_month = archive_dest.parent.name
         print(colored(f"Archived: {dir_name} -> archive/{year_month}/", Colors.GREEN), file=sys.stderr)
 
-        # Auto-commit unless --no-commit
-        if not getattr(args, "no_commit", False):
-            if not _auto_commit_archive(dir_name, repo_root, modified_children):
-                print(
-                    colored(
-                        "Archive moved on disk, but git auto-commit did not complete. "
-                        "Resolve `git status` before continuing.",
-                        Colors.RED,
-                    ),
-                    file=sys.stderr,
-                )
-                return 1
-
         # Return the archive path
         print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}/{year_month}/{dir_name}")
 
@@ -1402,152 +1358,6 @@ def cmd_archive(args: argparse.Namespace) -> int:
         return 0
 
     return 1
-
-
-def _auto_commit_archive(
-    task_name: str,
-    repo_root: Path,
-    modified_children: list[str] | None = None,
-) -> bool:
-    """Stage Trellis-owned task paths and commit after archive.
-
-    Scoped narrowly to the archived task's source + destination paths
-    plus any child task dirs whose ``task.json`` was edited (parent →
-    children relationship update). Dirty changes in OTHER active task
-    dirs are NOT bundled into the archive commit.
-
-    If ``.gitignore`` blocks the paths, we warn + skip — we do NOT
-    retry with ``git add -f``. The warning explicitly forbids
-    ``git add -f .trellis/`` (which would fan out to caches/backups)
-    and points users at ``session_auto_commit: false``.
-
-    Honors ``session_auto_commit`` in ``.trellis/config.yaml``: when
-    set to ``false``, this function returns immediately without
-    touching git (the archive directory move on disk is unaffected).
-    """
-    if not get_session_auto_commit(repo_root):
-        print(
-            "[OK] session_auto_commit: false — skipping git stage/commit.",
-            file=sys.stderr,
-        )
-        return True
-
-    source_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}/{task_name}"
-    rc, tracked_out, _ = run_git(
-        ["ls-files", "--", source_rel],
-        cwd=repo_root,
-    )
-    source_was_tracked = rc == 0 and bool(tracked_out.strip())
-
-    paths = safe_archive_paths_to_add(
-        repo_root, task_name=task_name, modified_children=modified_children
-    )
-    if not paths:
-        print("[OK] No task changes to commit.", file=sys.stderr)
-        return True
-
-    success, _, err = safe_git_add(paths, repo_root, retry_on_index_lock=True)
-    if not success:
-        if err and "ignored by" in err.lower():
-            print_gitignore_warning(paths)
-        elif stderr_indicates_index_lock(err):
-            _print_index_lock_warning(
-                "git add", task_name, repo_root, [*paths, source_rel]
-            )
-        else:
-            print(
-                f"[WARN] git add failed: {err.strip() if err else 'unknown error'}",
-                file=sys.stderr,
-            )
-        return not source_was_tracked
-
-    # Belt-and-suspenders for the phantom-delete bug: `safe_git_add` uses
-    # `git add` (no -A) which only stages additions/modifications. The
-    # source task directory was moved away by `shutil.move`, so its files
-    # need an explicit `git rm --cached` to stage the deletions in this
-    # same commit — otherwise they sit as uncommitted "phantom deletes"
-    # against HEAD until something later picks them up.
-    #
-    # `--ignore-unmatch` makes this a no-op when the task was never tracked
-    # (e.g. archiving a task that lived only in working tree).
-    rc, _, err = run_git_retry_index_lock(
-        ["rm", "-r", "--cached", "--ignore-unmatch", "--", source_rel],
-        cwd=repo_root,
-    )
-    if rc != 0 and stderr_indicates_index_lock(err):
-        # Committing now would record the archived copy without the
-        # source-side deletes — a half-archived tree in history.
-        _print_index_lock_warning(
-            "git rm --cached", task_name, repo_root, [*paths, source_rel]
-        )
-        return not source_was_tracked
-
-    rc, _, _ = run_git(
-        ["diff", "--cached", "--quiet", "--", *paths, source_rel],
-        cwd=repo_root,
-    )
-    if rc == 0:
-        print("[OK] No task changes to commit.", file=sys.stderr)
-        return True
-
-    commit_msg = f"chore(task): archive {task_name}"
-    # Commit with an explicit pathspec: a bare `git commit` would sweep any
-    # unrelated entries the developer had staged before archiving into the
-    # chore commit (#579). `source_rel` is included so the source-side
-    # deletions staged above land in the same commit.
-    rc, _, err = run_git_retry_index_lock(
-        ["commit", "-m", commit_msg, "--", *paths, source_rel], cwd=repo_root
-    )
-    if rc == 0:
-        print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
-        return True
-    elif stderr_indicates_index_lock(err):
-        _print_index_lock_warning(
-            "git commit", task_name, repo_root, [*paths, source_rel]
-        )
-        return not source_was_tracked
-    else:
-        print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
-        return not source_was_tracked
-
-
-def _print_index_lock_warning(
-    action: str, task_name: str, repo_root: Path, paths: list[str]
-) -> None:
-    """Report an archive auto-commit that gave up on a held index.lock.
-
-    The move itself already succeeded, so the state is consistent — the task
-    lives in archive/ and its changes are staged-or-not but never half of
-    both in a commit. Only the commit is outstanding, which the user (or an
-    agent reading the log) has to finish by hand.
-
-    ``paths`` are the paths the auto-commit would have staged, so the manual
-    command keeps the same narrow scope — a blanket ``git add -A -- .trellis/``
-    would sweep dirty changes from other active tasks into the archive commit.
-    """
-    lock = index_lock_path(repo_root)
-    print(
-        f"[WARN] {action} gave up after {INDEX_LOCK_RETRY_ATTEMPTS} attempts: "
-        f"another process is holding {lock}",
-        file=sys.stderr,
-    )
-    print(
-        "[WARN] The task was moved into archive/ on disk; only the commit is pending.",
-        file=sys.stderr,
-    )
-    print(
-        "[WARN] Close whatever holds the lock (an IDE git integration, a status",
-        file=sys.stderr,
-    )
-    print(
-        f"[WARN] daemon, another session), or delete {lock} if it is stale, then",
-        file=sys.stderr,
-    )
-    print(
-        f'[WARN] commit manually: git add -A -- {" ".join(paths)} && '
-        f'git commit -m "chore(task): archive {task_name}"',
-        file=sys.stderr,
-    )
 
 
 # =============================================================================
@@ -1871,4 +1681,43 @@ def cmd_set_meta(args: argparse.Namespace) -> int:
         return 1
 
     print(colored(f"✓ Meta set: {key} = {value}", Colors.GREEN))
+    return 0
+
+
+def cmd_complete(args: argparse.Namespace) -> int:
+    """Record completed acceptance checks before allowing archival."""
+    repo_root = get_repo_root()
+    task_dir = resolve_task_dir(args.dir, repo_root)
+    if task_dir is None or not is_within_tasks_dir(task_dir, repo_root):
+        print("Error: completion requires an active task directory", file=sys.stderr)
+        return 1
+    reason = strip_blank(args.reason)
+    if not reason:
+        print("Error: --reason must describe the completed acceptance checks", file=sys.stderr)
+        return 1
+    task_json = task_dir / FILE_TASK_JSON
+    data, error = read_json_checked(task_json)
+    if data is None:
+        _report_read_failure(task_json, error)
+        return 1
+    children = data.get("children", [])
+    if not isinstance(children, list) or any(not isinstance(child, str) for child in children):
+        print("Error: task children must be a list of task names", file=sys.stderr)
+        return 1
+    for child in children:
+        child_dir = find_task_by_name(child, get_tasks_dir(repo_root))
+        if child_dir:
+            child_data, error = read_json_checked(child_dir / FILE_TASK_JSON)
+            if child_data is None or child_data.get("status") not in ("completed", "done"):
+                print(f"Error: child task '{child}' is not completed", file=sys.stderr)
+                return 1
+    meta = data.get("meta")
+    if not isinstance(meta, dict):
+        meta = {}
+    meta["completion_reason"] = reason
+    data.update(status="completed", completedAt=datetime.now().strftime("%Y-%m-%d"), meta=meta)
+    if not write_json(task_json, data):
+        _report_write_failure(task_json)
+        return 1
+    print(f"Completed: {task_dir.name}")
     return 0

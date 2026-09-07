@@ -668,7 +668,6 @@ export function registerChannelCommand(program: Command): void {
     .option("--description <text>", "stable thread description")
     .option("--status <status>", "thread status")
     .option("--labels <csv>", "replace thread labels")
-    .option("--assignees <csv>", "replace thread assignees")
     .option("--summary <text>", "thread summary")
     .option(
       "--context-file <absolute-path>",

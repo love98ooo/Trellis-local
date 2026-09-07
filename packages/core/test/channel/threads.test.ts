@@ -65,7 +65,6 @@ describe("thread reducer and lifecycle", () => {
       thread: "t1",
       title: "Title",
       labels: ["a"],
-      assignees: ["arch"],
     });
     await postThread({
       channel: "b",
@@ -97,12 +96,12 @@ describe("thread reducer and lifecycle", () => {
 
     const states = await listForumThreads({ channel: "b" });
     expect(states).toHaveLength(1);
+    expect(states[0]).not.toHaveProperty("assignees");
     expect(states[0]).toMatchObject({
       thread: "t1",
       title: "Title",
       status: "processed",
       labels: ["a", "b"],
-      assignees: ["arch"],
       comments: 1,
     });
     const events = await readChannelEvents({ channel: "b" });
@@ -264,9 +263,7 @@ describe("thread reducer and lifecycle", () => {
       expect(listed).toEqual([{ type: "file", path: "/abs/a.md" }]);
       const states = await listForumThreads({ channel: "tc" });
       expect(states[0].thread).toBe("issue-new");
-      expect(states[0].context).toEqual([
-        { type: "file", path: "/abs/a.md" },
-      ]);
+      expect(states[0].context).toEqual([{ type: "file", path: "/abs/a.md" }]);
     });
   });
 

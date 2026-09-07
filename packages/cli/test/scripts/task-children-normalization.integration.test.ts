@@ -37,14 +37,6 @@ function setupRepo(tmp: string): void {
   fs.cpSync(TEMPLATE_SCRIPTS, path.join(tmp, ".trellis", "scripts"), {
     recursive: true,
   });
-  fs.writeFileSync(
-    path.join(tmp, ".trellis", "config.yaml"),
-    "session_auto_commit: false\n",
-  );
-  // `task.py create` refuses to run without a developer identity. Write the
-  // `.developer` file rather than exporting an env var, so this fixture does
-  // not depend on which identity sources the runtime happens to support.
-  fs.writeFileSync(path.join(tmp, ".trellis", ".developer"), "name=tester\n");
 }
 
 function makeTask(
@@ -64,8 +56,6 @@ function makeTask(
       status: "planning",
       priority: "P2",
       createdAt: "2026-08-19",
-      assignee: "tester",
-      creator: "tester",
       subtasks: [],
       children: [],
       parent: null,
@@ -103,86 +93,89 @@ function setChildren(repo: string, name: string, value: unknown): void {
 
 const PARENT = "08-19-parent";
 
-describe.skipIf(!hasPython())("non-list `children` in a parent task.json", () => {
-  let tmp: string;
+describe.skipIf(!hasPython())(
+  "non-list `children` in a parent task.json",
+  () => {
+    let tmp: string;
 
-  beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trellis-children-test-"));
-    setupRepo(tmp);
-    makeTask(tmp, PARENT, { children: null });
-  });
+    beforeEach(() => {
+      tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trellis-children-test-"));
+      setupRepo(tmp);
+      makeTask(tmp, PARENT, { children: null });
+    });
 
-  afterEach(() => {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  });
+    afterEach(() => {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    });
 
-  it("`create --parent` links, rather than writing a task the parent never references", () => {
-    const r = runTask(
-      tmp,
-      "create",
-      "Child",
-      "--description",
-      "d",
-      "--slug",
-      "kid",
-      "--parent",
-      `.trellis/tasks/${PARENT}`,
-      "--no-start",
-    );
-    expect(r.stderr).not.toContain("TypeError");
-    expect(r.status).toBe(0);
+    it("`create --parent` links, rather than writing a task the parent never references", () => {
+      const r = runTask(
+        tmp,
+        "create",
+        "Child",
+        "--description",
+        "d",
+        "--slug",
+        "kid",
+        "--parent",
+        `.trellis/tasks/${PARENT}`,
+        "--no-start",
+      );
+      expect(r.stderr).not.toContain("TypeError");
+      expect(r.status).toBe(0);
 
-    const created = fs
-      .readdirSync(path.join(tmp, ".trellis", "tasks"))
-      .filter((d) => d.endsWith("-kid"));
-    expect(created).toHaveLength(1);
+      const created = fs
+        .readdirSync(path.join(tmp, ".trellis", "tasks"))
+        .filter((d) => d.endsWith("-kid"));
+      expect(created).toHaveLength(1);
 
-    // The whole point: the task on disk and the parent's list agree.
-    expect(readChildren(tmp, PARENT)).toEqual(created);
-    expect(
-      JSON.parse(
-        fs.readFileSync(
-          path.join(tmp, ".trellis", "tasks", created[0], "task.json"),
-          "utf-8",
-        ),
-      ).parent,
-    ).toBe(PARENT);
-  });
+      // The whole point: the task on disk and the parent's list agree.
+      expect(readChildren(tmp, PARENT)).toEqual(created);
+      expect(
+        JSON.parse(
+          fs.readFileSync(
+            path.join(tmp, ".trellis", "tasks", created[0], "task.json"),
+            "utf-8",
+          ),
+        ).parent,
+      ).toBe(PARENT);
+    });
 
-  it.each([
-    ["null", null],
-    ["a string", "08-19-not-a-list"],
-    ["a number", 42],
-    ["an object", { "08-19-kid": true }],
-  ])("`add-subtask` normalizes %s instead of crashing", (_label, value) => {
-    const child = "08-19-standalone";
-    makeTask(tmp, child);
-    setChildren(tmp, PARENT, value);
+    it.each([
+      ["null", null],
+      ["a string", "08-19-not-a-list"],
+      ["a number", 42],
+      ["an object", { "08-19-kid": true }],
+    ])("`add-subtask` normalizes %s instead of crashing", (_label, value) => {
+      const child = "08-19-standalone";
+      makeTask(tmp, child);
+      setChildren(tmp, PARENT, value);
 
-    const r = runTask(
-      tmp,
-      "add-subtask",
-      `.trellis/tasks/${PARENT}`,
-      `.trellis/tasks/${child}`,
-    );
-    expect(r.stderr).not.toContain("TypeError");
-    expect(r.status).toBe(0);
-    expect(readChildren(tmp, PARENT)).toEqual([child]);
-  });
+      const r = runTask(
+        tmp,
+        "add-subtask",
+        `.trellis/tasks/${PARENT}`,
+        `.trellis/tasks/${child}`,
+      );
+      expect(r.stderr).not.toContain("TypeError");
+      expect(r.status).toBe(0);
+      expect(readChildren(tmp, PARENT)).toEqual([child]);
+    });
 
-  it("`remove-subtask` leaves a valid empty list when the field was null", () => {
-    const child = "08-19-standalone";
-    makeTask(tmp, child, { parent: PARENT });
-    setChildren(tmp, PARENT, null);
+    it("`remove-subtask` leaves a valid empty list when the field was null", () => {
+      const child = "08-19-standalone";
+      makeTask(tmp, child, { parent: PARENT });
+      setChildren(tmp, PARENT, null);
 
-    const r = runTask(
-      tmp,
-      "remove-subtask",
-      `.trellis/tasks/${PARENT}`,
-      `.trellis/tasks/${child}`,
-    );
-    expect(r.stderr).not.toContain("TypeError");
-    expect(r.status).toBe(0);
-    expect(readChildren(tmp, PARENT)).toEqual([]);
-  });
-});
+      const r = runTask(
+        tmp,
+        "remove-subtask",
+        `.trellis/tasks/${PARENT}`,
+        `.trellis/tasks/${child}`,
+      );
+      expect(r.stderr).not.toContain("TypeError");
+      expect(r.status).toBe(0);
+      expect(readChildren(tmp, PARENT)).toEqual([]);
+    });
+  },
+);

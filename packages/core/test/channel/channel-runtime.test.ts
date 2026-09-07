@@ -1,3 +1,4 @@
+import { resolveChannelRef } from "../../src/channel/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -96,7 +97,11 @@ describe("readChannelEvents pagination", () => {
 
   it("limit caps a cursor page", async () => {
     await seed();
-    const page = await readChannelEvents({ channel: "c", afterSeq: 1, limit: 2 });
+    const page = await readChannelEvents({
+      channel: "c",
+      afterSeq: 1,
+      limit: 2,
+    });
     expect(page.map((e) => e.seq)).toEqual([2, 3]);
   });
 
@@ -153,7 +158,13 @@ describe("sendMessage delivery modes", () => {
   it("requireRunningWorker signals undeliverable for terminal targets", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "w", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "w",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     await appendEvent("c", {
@@ -181,7 +192,13 @@ describe("sendMessage delivery modes", () => {
   it("requireRunningWorker accepts a running worker", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "w", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "w",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     await sendMessage({
@@ -198,7 +215,13 @@ describe("sendMessage delivery modes", () => {
   it("requireRunningWorker still accepts a worker after a completed turn", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "w", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "w",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     await appendEvent("c", { kind: "done", by: "w" });
@@ -289,7 +312,13 @@ describe("spawnWorker / interrupt APIs", () => {
   it("interruptWorker orchestrates runtime interrupt and records outcome", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "w", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "w",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     const result = await interruptWorker(
@@ -330,7 +359,13 @@ describe("spawnWorker / interrupt APIs", () => {
   it("interruptWorker reports interrupted-current-turn for a mid-turn worker", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "w", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "w",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     await appendEvent("c", {
@@ -362,11 +397,23 @@ describe("listWorkers / watchWorkers", () => {
   it("listWorkers hides terminal workers by default", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "live", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "live",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "gone", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "gone",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     await appendEvent("c", {
@@ -387,7 +434,13 @@ describe("listWorkers / watchWorkers", () => {
   it("listWorkers keeps a worker active after adapter done events", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "w", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "w",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     await appendEvent("c", { kind: "done", by: "w" });
@@ -400,7 +453,13 @@ describe("listWorkers / watchWorkers", () => {
   it("watchWorkers yields a snapshot then updates on new events", async () => {
     await createChannel({ channel: "c", by: "main" });
     await spawnWorker(
-      { channel: "c", cwd: env.projectDir, by: "main", workerId: "w", systemPrompt: "x" },
+      {
+        channel: "c",
+        cwd: env.projectDir,
+        by: "main",
+        workerId: "w",
+        systemPrompt: "x",
+      },
       fakeRuntime,
     );
     const ac = new AbortController();
@@ -435,7 +494,12 @@ describe("watchChannels cross-channel fan-in", () => {
 
   it("channelCursorKey is stable per scope/project/name", () => {
     expect(
-      channelCursorKey({ name: "n", scope: "project", project: "p", dir: "/x" }),
+      channelCursorKey({
+        name: "n",
+        scope: "project",
+        project: "p",
+        dir: "/x",
+      }),
     ).toBe("project/p/n");
   });
 
@@ -445,7 +509,10 @@ describe("watchChannels cross-channel fan-in", () => {
     await sendMessage({ channel: "a", by: "main", text: "from-a" });
     await sendMessage({ channel: "b", by: "main", text: "from-b" });
 
-    const projectKey = env.projectDir.replace(/[\\/_]/g, "-").replace(/[^A-Za-z0-9.-]/g, "-");
+    const projectKey = resolveChannelRef({
+      channel: "a",
+      forCreate: true,
+    }).project;
     const ac = new AbortController();
     const gen = watchChannels({
       scope: { projectKey },
@@ -464,7 +531,10 @@ describe("watchChannels cross-channel fan-in", () => {
 
   it("discovers channels created after the watcher starts", async () => {
     await createChannel({ channel: "a", by: "main" });
-    const projectKey = env.projectDir.replace(/[\\/_]/g, "-").replace(/[^A-Za-z0-9.-]/g, "-");
+    const projectKey = resolveChannelRef({
+      channel: "a",
+      forCreate: true,
+    }).project;
     const ac = new AbortController();
     const gen = watchChannels({
       scope: { projectKey },

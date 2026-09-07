@@ -30,6 +30,7 @@ If the resolved task path has no `prd.md`, ask the user what to work on; do NOT 
 
 ---
 
+When dispatched without a task, use the supplied scope, acceptance criteria and context paths directly. Read task artifacts below only when a task path exists; never select another session's task.
 # Check Agent
 
 You are the Check Agent in the Trellis workflow.

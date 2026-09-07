@@ -133,6 +133,44 @@ describe("opencode session context dedupe", () => {
 });
 
 describe("opencode session-start history detection", () => {
+  it("loads the personal journal and reports task facts without planning gates", () => {
+    const root = mkdtempSync(join(tmpdir(), "trellis-personal-opencode-"));
+    try {
+      const task = join(root, ".trellis", "tasks", "work");
+      const workspace = join(root, ".trellis", "workspace");
+      mkdirSync(task, { recursive: true });
+      mkdirSync(workspace, { recursive: true });
+      writeFileSync(join(workspace, "journal-1.md"), "# Personal journal\n");
+      writeFileSync(
+        join(task, "task.json"),
+        JSON.stringify({ status: "planning", title: "Work" }),
+      );
+      const context = buildSessionContext({
+        directory: root,
+        getActiveTask: () => ({
+          taskPath: "tasks/work",
+          source: "session",
+          stale: false,
+        }),
+        getContextKey: () => null,
+        getCurrentTask: () => null,
+        readFile: () => "",
+        readProjectFile: () => "",
+        resolveTaskDir: () => task,
+        runScript: () => "",
+      });
+      expect(context).toContain("Journal: .trellis/workspace/journal-1.md");
+      expect(context).toContain("Status: PLANNING");
+      expect(context).toContain("Follow .trellis/workflow.md");
+      expect(context).not.toContain("Developer:");
+      expect(context).not.toContain("complex task must add");
+      expect(context).not.toContain("user confirms start");
+      expect(context).not.toContain("--mine");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   afterEach((): void => {
     contextCollector.clear("session-a");
   });
@@ -220,7 +258,9 @@ describe("opencode session-start history detection", () => {
     expect(laterMessages[0].parts).toBe(originalFirstParts);
     expect(originalLaterParts).toHaveLength(1);
     expect(laterMessages[2].parts[0].text).toMatch(/^<session-context>/);
-    expect(laterMessages[2].parts[0].text).not.toContain("<first-reply-notice>");
+    expect(laterMessages[2].parts[0].text).not.toContain(
+      "<first-reply-notice>",
+    );
     expect(laterMessages[2].parts[1]).toEqual(originalLaterParts[0]);
   });
 
@@ -559,17 +599,17 @@ describe("opencode persisted synthetic context parts", () => {
         );
       }
 
-      expect(parts.map(part => part.text)).toEqual([
+      expect(parts.map((part) => part.text)).toEqual([
         "session context",
         "workflow context",
         "ordinary user prompt",
       ]);
-      expect(parts.map(part => part.id)).toEqual(
+      expect(parts.map((part) => part.id)).toEqual(
         [...parts]
           .sort((left, right) =>
             left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
           )
-          .map(part => part.id),
+          .map((part) => part.id),
       );
       expect(parts[0].id).not.toBe(parts[1].id);
       expect(parts[2]).toEqual(ordinary);
@@ -593,9 +633,7 @@ describe("opencode persisted synthetic context parts", () => {
         "000000000001",
       ),
     ];
-    const unsupportedIdentityBefore = structuredClone(
-      unsupportedIdentityParts,
-    );
+    const unsupportedIdentityBefore = structuredClone(unsupportedIdentityParts);
     expect(() =>
       insertSyntheticTextPart(
         unsupportedIdentityParts,
@@ -610,11 +648,7 @@ describe("opencode persisted synthetic context parts", () => {
     ];
     const missingIdentityBefore = structuredClone(missingIdentityParts);
     expect(() =>
-      insertSyntheticTextPart(
-        missingIdentityParts,
-        "context",
-        "sessionStart",
-      ),
+      insertSyntheticTextPart(missingIdentityParts, "context", "sessionStart"),
     ).toThrow("no ordinary OpenCode part with a persisted identity");
     expect(missingIdentityParts).toEqual(missingIdentityBefore);
 
@@ -729,7 +763,10 @@ function setupTrellisProject(): string {
   const taskDir = join(dir, ".trellis", "tasks", "demo-task");
   mkdirSync(taskDir, { recursive: true });
   mkdirSync(join(dir, ".trellis", ".runtime", "sessions"), { recursive: true });
-  writeFileSync(join(taskDir, "prd.md"), "# Demo PRD\n\nGoal: verify injection.");
+  writeFileSync(
+    join(taskDir, "prd.md"),
+    "# Demo PRD\n\nGoal: verify injection.",
+  );
   writeFileSync(join(taskDir, "implement.jsonl"), "");
   writeFileSync(join(taskDir, "check.jsonl"), "");
   writeFileSync(
@@ -858,9 +895,9 @@ describe("opencode inject-subagent-context (issue #264)", () => {
     expect(output.args.prompt).toContain("do the implementation");
     // Marker must be at the top so generated agent definitions can detect
     // successful injection via a prefix check.
-    expect(output.args.prompt.startsWith("<!-- trellis-hook-injected -->")).toBe(
-      true,
-    );
+    expect(
+      output.args.prompt.startsWith("<!-- trellis-hook-injected -->"),
+    ).toBe(true);
   });
 
   it("inlines JSONL-referenced spec content into the implement prompt", async () => {
@@ -996,8 +1033,10 @@ describe("opencode messages.transform injection (issue #553)", () => {
 
   function ephemeralTexts(message: TransformMessage): string[] {
     return message.parts
-      .filter(part => part.synthetic === true && typeof part.text === "string")
-      .map(part => part.text as string);
+      .filter(
+        (part) => part.synthetic === true && typeof part.text === "string",
+      )
+      .map((part) => part.text as string);
   }
 
   it("injects both plugins onto the latest user message without mutating history", async () => {
@@ -1039,10 +1078,10 @@ describe("opencode messages.transform injection (issue #553)", () => {
       expect(originalLatestParts).toEqual([ordinary]);
       expect(messages[2]).not.toBe(latest);
       const texts = ephemeralTexts(messages[2]);
-      expect(texts.some(text => text.startsWith("<session-context>"))).toBe(
+      expect(texts.some((text) => text.startsWith("<session-context>"))).toBe(
         true,
       );
-      expect(texts.some(text => text.startsWith("<workflow-state>"))).toBe(
+      expect(texts.some((text) => text.startsWith("<workflow-state>"))).toBe(
         true,
       );
       expect(messages[2].parts.at(-1)).toEqual(ordinary);
@@ -1071,8 +1110,12 @@ describe("opencode messages.transform injection (issue #553)", () => {
 
     expect(originalParts).toEqual([attachment]);
     const texts = ephemeralTexts(messages[0]);
-    expect(texts.some(text => text.startsWith("<session-context>"))).toBe(true);
-    expect(texts.some(text => text.startsWith("<workflow-state>"))).toBe(true);
+    expect(texts.some((text) => text.startsWith("<session-context>"))).toBe(
+      true,
+    );
+    expect(texts.some((text) => text.startsWith("<workflow-state>"))).toBe(
+      true,
+    );
     expect(messages[0].parts.at(-1)).toEqual(attachment);
   });
 
@@ -1089,7 +1132,10 @@ describe("opencode messages.transform injection (issue #553)", () => {
     await workflowHooks[MESSAGES_TRANSFORM_HOOK]({}, { messages });
     expect(originalParts).toEqual([{ type: "text", text: "original" }]);
     expect(ephemeralTexts(messages[0]).length).toBe(2);
-    expect(messages[0].parts.at(-1)).toEqual({ type: "text", text: "original" });
+    expect(messages[0].parts.at(-1)).toEqual({
+      type: "text",
+      text: "original",
+    });
   });
 
   it("checks the skip keyword only in ordinary user text", async () => {
@@ -1108,9 +1154,11 @@ describe("opencode messages.transform injection (issue #553)", () => {
     };
     const messages = [latest];
     await hooks[MESSAGES_TRANSFORM_HOOK]({}, { messages });
-    expect(ephemeralTexts(messages[0]).some(text =>
-      text.startsWith("<workflow-state>"),
-    )).toBe(true);
+    expect(
+      ephemeralTexts(messages[0]).some((text) =>
+        text.startsWith("<workflow-state>"),
+      ),
+    ).toBe(true);
     expect(messages[0].parts.at(-1)).toEqual(ordinary);
   });
 
@@ -1222,7 +1270,7 @@ describe("opencode messages.transform injection (issue #553)", () => {
     expect(notSkippedMessages[0].parts[0].text).toContain("<workflow-state>");
   });
 
-  it("inject-workflow-state.js disables the escape hatch with skip_keyword: \"\"", async () => {
+  it('inject-workflow-state.js disables the escape hatch with skip_keyword: ""', async () => {
     writeFileSync(
       join(dir, ".trellis", "config.yaml"),
       ["prompt_injection:", '  skip_keyword: ""'].join("\n"),
@@ -1279,7 +1327,7 @@ describe("opencode context injection limits (issue #441)", () => {
   function writeJsonlEntries(entries: Record<string, string>[]): void {
     writeFileSync(
       join(dir, ".trellis", "tasks", "demo-task", "implement.jsonl"),
-      entries.map(e => JSON.stringify(e)).join("\n") + "\n",
+      entries.map((e) => JSON.stringify(e)).join("\n") + "\n",
       "utf-8",
     );
   }
@@ -1439,8 +1487,7 @@ describe("opencode context injection limits (issue #441)", () => {
     });
 
     it("does not misclassify legitimate multi-byte UTF-8 content as binary", async () => {
-      const multiByteContent =
-        "emoji: 🎉🚀 cjk: 中文测试 bmp: café naïve\n";
+      const multiByteContent = "emoji: 🎉🚀 cjk: 中文测试 bmp: café naïve\n";
       writeFileSync(join(dir, "multibyte.md"), multiByteContent, "utf-8");
       writeJsonlEntries([{ file: "multibyte.md", reason: "unicode spec" }]);
 
@@ -1596,7 +1643,11 @@ describe("opencode context injection limits (issue #441)", () => {
       mkdirSync(join(dir, "refdir"), { recursive: true });
       writeFileSync(join(dir, "refdir", "a.md"), "A".repeat(1000), "utf-8");
       writeFileSync(join(dir, "refdir", "b.md"), "B".repeat(1000), "utf-8");
-      writeFileSync(join(dir, "refdir", "c.txt"), "IGNORED_TXT_CONTENT", "utf-8");
+      writeFileSync(
+        join(dir, "refdir", "c.txt"),
+        "IGNORED_TXT_CONTENT",
+        "utf-8",
+      );
       writeJsonlEntries([
         { file: "refdir/", type: "directory", reason: "reference dir" },
       ]);

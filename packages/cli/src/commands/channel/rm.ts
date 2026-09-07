@@ -14,8 +14,6 @@ import {
   channelRoot,
   currentProjectKey,
   eventsPath,
-  listProjects,
-  migrateLegacyChannels,
   projectDir,
   resolveExistingChannelRef,
 } from "./store/paths.js";
@@ -76,7 +74,6 @@ export async function channelPrune(opts: PruneOptions): Promise<void> {
     );
   }
 
-  migrateLegacyChannels();
   const scope = parseChannelScope(opts.scope);
   const root = channelRoot();
   if (!fs.existsSync(root)) {
@@ -93,13 +90,7 @@ export async function channelPrune(opts: PruneOptions): Promise<void> {
   }[] = [];
 
   const projects =
-    scope === "global"
-      ? [GLOBAL_PROJECT_KEY]
-      : scope === "project"
-        ? [currentProjectKey()]
-        : listProjects();
-  // Unscoped prune stays repo-wide by design; users want to clean across
-  // projects with one command.
+    scope === "global" ? [GLOBAL_PROJECT_KEY] : [currentProjectKey()];
   for (const project of projects) {
     const dir = projectDir(project);
     let entries: string[];

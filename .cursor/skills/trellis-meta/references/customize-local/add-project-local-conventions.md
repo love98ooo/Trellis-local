@@ -1,6 +1,6 @@
 # Add Project-Local Conventions
 
-Often the user does not need to change Trellis mechanics; they need local AI to understand their team's conventions. In that case, prefer `.trellis/spec/` or a project-local skill instead of editing `trellis-meta`.
+Often the user does not need to change Trellis mechanics; they need local AI to understand their project's conventions. In that case, prefer `.trellis/spec/` or a project-local skill instead of editing `trellis-meta`.
 
 ## Where To Put Things
 
@@ -10,7 +10,7 @@ Often the user does not need to change Trellis mechanics; they need local AI to 
 | Cross-layer thinking methods | `.trellis/spec/guides/` |
 | AI capability for a project-specific flow | Platform-local skill |
 | One-off task material | `.trellis/tasks/<task>/` |
-| Session summary | `.trellis/workspace/<developer>/journal-N.md` |
+| Session summary | `.trellis/workspace/journal-N.md` |
 
 ## Create A Project-Local Skill
 
@@ -26,7 +26,7 @@ Example:
 ```md
 ---
 name: trellis-local
-description: "Project-local Trellis customizations for this repository. Use when changing this project's Trellis workflow, hooks, local agents, or team-specific conventions."
+description: "Project-local Trellis customizations for this repository. Use when changing this project's Trellis workflow, hooks, local agents, or project-specific conventions."
 ---
 
 # Trellis Local
@@ -80,4 +80,4 @@ python3 ./.trellis/scripts/task.py add-context <task> check ".trellis/spec/backe
 - the current task
 - workspace journal
 
-This prevents future updates to Trellis's built-in `trellis-meta` from overwriting the team's own conventions.
+This prevents future updates to Trellis's built-in `trellis-meta` from overwriting personal project conventions.

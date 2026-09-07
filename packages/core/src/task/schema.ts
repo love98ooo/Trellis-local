@@ -2,11 +2,11 @@
  * Canonical task.json shape — single source of truth for Trellis tasks.
  *
  * The runtime Python writer is `.trellis/scripts/common/task_store.py`
- * (`cmd_create`). The 24-field shape and field order below mirror that
+ * (`cmd_create`). The canonical shape and field order below mirror that
  * writer exactly so every TS and Python entry point produces structurally
  * identical task.json files.
  *
- * Downstream consumers (CLI bootstrap, migration tooling, external Node
+ * Downstream consumers (CLI, migration tooling, external Node
  * services) should depend on this type instead of redefining their own
  * task.json shape.
  */
@@ -20,8 +20,6 @@ export interface TrellisTaskRecord {
   scope: string | null;
   package: string | null;
   priority: string;
-  creator: string;
-  assignee: string;
   createdAt: string;
   completedAt: string | null;
   branch: string | null;
@@ -51,8 +49,6 @@ export const TASK_RECORD_FIELD_ORDER = [
   "scope",
   "package",
   "priority",
-  "creator",
-  "assignee",
   "createdAt",
   "completedAt",
   "branch",
@@ -77,8 +73,6 @@ const STRING_FIELDS: ReadonlySet<TaskRecordField> = new Set([
   "description",
   "status",
   "priority",
-  "creator",
-  "assignee",
   "createdAt",
   "notes",
 ]);
@@ -191,9 +185,9 @@ function assignField(
 /**
  * Produce a fully-populated canonical-shape {@link TrellisTaskRecord}.
  *
- * All 24 fields are present in canonical order. `overrides` shallow-merges
+ * All canonical fields are present in canonical order. `overrides` shallow-merges
  * over the defaults — callers supply per-task values (id, name, title,
- * assignee, createdAt, etc.) and leave null-default fields untouched
+ * createdAt, etc.) and leave null-default fields untouched
  * unless they have a real value.
  */
 export function emptyTaskRecord(
@@ -210,8 +204,6 @@ export function emptyTaskRecord(
     scope: null,
     package: null,
     priority: "P2",
-    creator: "",
-    assignee: "",
     createdAt: today,
     completedAt: null,
     branch: null,
@@ -242,7 +234,9 @@ export function emptyTaskRecord(
   return record;
 }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(
+  value: unknown,
+): value is Record<string, unknown> {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -277,7 +271,9 @@ function cloneJsonValue(value: unknown, path: string): unknown {
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((item, index) => cloneJsonValue(item, `${path}[${index}]`));
+    return value.map((item, index) =>
+      cloneJsonValue(item, `${path}[${index}]`),
+    );
   }
   if (isPlainObject(value)) {
     return cloneJsonObject(value, path);

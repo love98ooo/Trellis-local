@@ -1130,7 +1130,7 @@ def main():
             sys.exit(0)
         # Contain the pointer before reading anything through it. `task.py` now
         # refuses to store a ref that leaves the repo, but a session file
-        # written before that fix can still hold one, and `trellis update`
+        # written before that fix can still hold one, and `trellis-local update`
         # does not rewrite session files — so a poisoned pointer outlives the
         # upgrade that closed the writer. This is the last hop before the
         # task's prd.md/design.md reach the model prompt, so it checks again.

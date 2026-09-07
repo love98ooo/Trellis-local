@@ -107,13 +107,14 @@ const CONFIGURE_ONLY_PATHS = new Set([".claude/hooks/statusline.py"]);
  * `Map<path, content>` cannot express an empty directory, so each one is
  * named here against the platform that needs it.
  */
-const CONFIGURE_ONLY_EMPTY_DIRS: Partial<Record<(typeof PLATFORM_IDS)[number], string[]>> =
-  {
-    // Trellis ships no Codex-specific skills (they all land in
-    // `.agents/skills/`, which Codex reads too). The directory is still
-    // created so users have the conventional place for their own.
-    codex: [".codex/skills"],
-  };
+const CONFIGURE_ONLY_EMPTY_DIRS: Partial<
+  Record<(typeof PLATFORM_IDS)[number], string[]>
+> = {
+  // Trellis ships no Codex-specific skills (they all land in
+  // `.agents/skills/`, which Codex reads too). The directory is still
+  // created so users have the conventional place for their own.
+  codex: [".codex/skills"],
+};
 
 /** Every file under `root`, as POSIX paths relative to `root`. */
 function walkFiles(root: string, rel = ""): string[] {
@@ -195,13 +196,17 @@ describe("getConfiguredPlatforms", () => {
     });
     expect(getConfiguredPlatforms(tmpDir).has("devin")).toBe(false);
 
-    fs.writeFileSync(path.join(workflowsDir, "trellis-continue.md"), "# Trellis");
+    fs.writeFileSync(
+      path.join(workflowsDir, "trellis-continue.md"),
+      "# Trellis",
+    );
     const result = getConfiguredPlatforms(tmpDir);
     expect(result.has("devin")).toBe(true);
   });
 
-  it("detects every platform from the files Trellis tracked for it", async () => {
-    for (const id of PLATFORM_IDS) {
+  it.each(PLATFORM_IDS)(
+    "detects %s from the files Trellis tracked for it",
+    async (id) => {
       const platformRoot = path.join(tmpDir, id);
       fs.mkdirSync(platformRoot, { recursive: true });
       const written = startRecordingWrites(platformRoot);
@@ -214,8 +219,8 @@ describe("getConfiguredPlatforms", () => {
       initializeHashes(platformRoot, { trackedPaths: written });
 
       expect([...getConfiguredPlatforms(platformRoot)]).toEqual([id]);
-    }
-  });
+    },
+  );
 
   it("ignores unrelated directories", () => {
     fs.mkdirSync(path.join(tmpDir, ".vscode"));
@@ -264,8 +269,9 @@ describe("configurePlatform", () => {
     expect(fs.existsSync(path.join(tmpDir, ".codex"))).toBe(true);
   });
 
-  it("configurePlatform writes collected templates byte-for-byte for every platform", async () => {
-    for (const id of PLATFORM_IDS) {
+  it.each(PLATFORM_IDS)(
+    "configurePlatform(%s) writes collected templates byte-for-byte",
+    async (id) => {
       const platformDir = fs.mkdtempSync(
         path.join(os.tmpdir(), `trellis-parity-${id}-`),
       );
@@ -293,14 +299,15 @@ describe("configurePlatform", () => {
       } finally {
         fs.rmSync(platformDir, { recursive: true, force: true });
       }
-    }
-  });
+    },
+  );
 
-  it("configurePlatform writes no file collectTemplates does not describe, for every platform", async () => {
-    // The reverse of the assertion above. Without it, "configure writes a file
-    // collectTemplates forgot" passes the suite silently — the exact failure
-    // mode that shipped in 0.5.5 (codex trellis-start).
-    for (const id of PLATFORM_IDS) {
+  it.each(PLATFORM_IDS)(
+    "configurePlatform(%s) writes only described files and is idempotent",
+    async (id) => {
+      // The reverse of the assertion above. Without it, "configure writes a file
+      // collectTemplates forgot" passes the suite silently — the exact failure
+      // mode that shipped in 0.5.5 (codex trellis-start).
       const platformDir = fs.mkdtempSync(
         path.join(os.tmpdir(), `trellis-reverse-${id}-`),
       );
@@ -335,16 +342,17 @@ describe("configurePlatform", () => {
       } finally {
         fs.rmSync(platformDir, { recursive: true, force: true });
       }
-    }
-  });
+    },
+  );
 
-  it("configurePlatform and collectTemplates agree under Windows python rendering", async () => {
-    // `collectPlatformTemplates` rewrites python3 → python for the whole map in
-    // one place; `configure` has to reach the same bytes. A site that writes
-    // raw content is invisible on macOS/Linux, where the rewrite is a no-op.
-    setResolvedPythonCommand("python");
-    try {
-      for (const id of PLATFORM_IDS) {
+  it.each(PLATFORM_IDS)(
+    "configurePlatform(%s) matches Windows python rendering",
+    async (id) => {
+      // `collectPlatformTemplates` rewrites python3 → python for the whole map in
+      // one place; `configure` has to reach the same bytes. A site that writes
+      // raw content is invisible on macOS/Linux, where the rewrite is a no-op.
+      setResolvedPythonCommand("python");
+      try {
         const platformDir = fs.mkdtempSync(
           path.join(os.tmpdir(), `trellis-win-${id}-`),
         );
@@ -377,11 +385,11 @@ describe("configurePlatform", () => {
         } finally {
           fs.rmSync(platformDir, { recursive: true, force: true });
         }
+      } finally {
+        resetResolvedPythonCommand();
       }
-    } finally {
-      resetResolvedPythonCommand();
-    }
-  });
+    },
+  );
 
   it("configurePlatform('claude-code', --with-statusline) writes exactly one undescribed file", async () => {
     // The one named exemption, exercised. `--with-statusline` is the only opt-in
@@ -916,7 +924,9 @@ describe("configurePlatform", () => {
       fs.mkdirSync(path.join(emptyDir, ".snow"), { recursive: true });
       fs.writeFileSync(path.join(emptyDir, ".snow", "settings.json"), "{}");
       expect(getConfiguredPlatforms(emptyDir).has("snow")).toBe(false);
-      fs.mkdirSync(path.join(emptyDir, ".snow", "commands"), { recursive: true });
+      fs.mkdirSync(path.join(emptyDir, ".snow", "commands"), {
+        recursive: true,
+      });
       expect(getConfiguredPlatforms(emptyDir).has("snow")).toBe(false);
       fs.mkdirSync(path.join(emptyDir, ".snow", "agents"), { recursive: true });
       expect(getConfiguredPlatforms(emptyDir).has("snow")).toBe(false);
@@ -1054,7 +1064,7 @@ describe("configurePlatform", () => {
         path.join(tmpDir, ".dsh", "skills", "trellis-start", "SKILL.md"),
         "utf-8",
       ),
-    ).toContain("--platform dsh");
+    ).toContain(".trellis/workflow.md");
 
     // Shared workflow skills land in .agents/skills/, entry skills stay private
     expect(

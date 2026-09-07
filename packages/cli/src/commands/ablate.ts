@@ -362,7 +362,7 @@ export async function ablate(options: AblateOptions = {}): Promise<void> {
   const transactionPaths = getTransactionPaths(projectRoot, stateRoot);
   if (fs.existsSync(transactionPaths.transactionDir)) {
     throw new Error(
-      "This project is already ablated or has an interrupted ablation. Run `trellis restore` first.",
+      "This project is already ablated or has an interrupted ablation. Run `trellis-local restore` first.",
     );
   }
 
@@ -374,7 +374,7 @@ export async function ablate(options: AblateOptions = {}): Promise<void> {
   const hashes = loadHashes(projectRoot);
   if (Object.keys(hashes).length === 0) {
     throw new Error(
-      "Trellis manifest is missing or not v2. Run the current `trellis update` before ablation.",
+      "Trellis manifest is missing or not v2. Run the current `trellis-local update` before ablation.",
     );
   }
 
@@ -426,7 +426,7 @@ export async function ablate(options: AblateOptions = {}): Promise<void> {
   withAblationProjectLock(transactionPaths, () => {
     if (lstatIfPresent(transactionPaths.transactionDir)) {
       throw new Error(
-        "This project is already ablated or has an interrupted ablation. Run `trellis restore` first.",
+        "This project is already ablated or has an interrupted ablation. Run `trellis-local restore` first.",
       );
     }
     const transaction = stageAblationTransaction(

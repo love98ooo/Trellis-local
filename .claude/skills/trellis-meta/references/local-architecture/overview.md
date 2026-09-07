@@ -1,6 +1,6 @@
 # Local Trellis Architecture Overview
 
-`trellis-meta` is for user projects that have already run `trellis init`. The user's machine usually has only the npm-installed `trellis` command plus the Trellis files generated inside the project; it may not have the Trellis CLI source code.
+`trellis-meta` is for user projects that have already run `trellis-local init`. The user's machine usually has only the independently installed `trellis-local` command plus the Trellis files generated inside the project; it may not have the Trellis CLI source code.
 
 Therefore, when an AI uses this skill, the default customization target is local files inside the user project:
 
@@ -28,7 +28,7 @@ All three layers live inside the user project, so an AI can read and modify them
 | `.trellis/config.yaml` | Project configuration, task lifecycle hooks, monorepo package configuration, and journal configuration. |
 | `.trellis/spec/` | The user's project-specific coding conventions and thinking guides. |
 | `.trellis/tasks/` | Each task's PRD, technical notes, research files, and JSONL context. |
-| `.trellis/workspace/` | Per-developer journals and cross-session memory. |
+| `.trellis/workspace/` | Personal worktree journals and cross-session memory. |
 | `.trellis/scripts/` | Local Python runtime used by commands, hooks, and context injection. |
 | `.trellis/.runtime/` | Session-level runtime state, such as the current task pointer. |
 | `.trellis/.template-hashes.json` | Template hashes for Trellis-managed files, used by update to determine whether local files were modified by the user. |
@@ -38,7 +38,7 @@ All three layers live inside the user project, so an AI can read and modify them
 1. **Find the local source of truth first**: Do not edit from memory. Read `.trellis/workflow.md`, `.trellis/config.yaml`, the relevant platform directory, and related task files first.
 2. **Edit the user project, not the npm package cache**: Modify generated files inside the project, not `node_modules` or the global npm install directory.
 3. **Keep platform files aligned with `.trellis/`**: If workflow routing changes, also check whether platform skills or commands still describe the same flow.
-4. **Put project-specific rules in `.trellis/spec/` or a local skill**: Do not put team conventions into `trellis-meta`.
+4. **Put project-specific rules in `.trellis/spec/` or a local skill**: Do not put private project conventions into `trellis-meta`.
 5. **Preserve user changes**: If a file was already modified locally, work from the current content instead of overwriting it with a default template.
 
 ## How To Use This Directory

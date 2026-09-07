@@ -105,7 +105,6 @@ describe("channel storage and forum channels", () => {
       title: "Channel thread mode",
       description: "Track thread-channel feedback.",
       labels: "channel,ux",
-      assignees: "arch",
     });
     await channelThreadPost("roadmap", {
       as: "arch",
@@ -151,7 +150,6 @@ describe("channel storage and forum channels", () => {
       title: "Channel thread mode",
       status: "processed",
       labels: ["channel", "reviewed"],
-      assignees: ["arch"],
       summary: "Thread channel behavior reviewed.",
       lastSeq: events.at(-1)?.seq,
       comments: 1,
@@ -187,13 +185,13 @@ describe("channel storage and forum channels", () => {
     );
   });
 
-  it("requires explicit scope when a channel exists in global and project scopes", async () => {
+  it("defaults to current worktree when a global channel has the same name", async () => {
     await createChannel("dupe", { by: "main" });
     await createChannel("dupe", { by: "main", scope: "global" });
 
-    await expect(
-      channelSend("dupe", { as: "main", text: "ambiguous" }),
-    ).rejects.toThrow("Use --scope global or --scope project");
+    await channelSend("dupe", { as: "main", text: "local message" });
+    const local = await readChannelEvents("dupe", projectKey(projectDir));
+    expect(local.at(-1)).toMatchObject({ text: "local message" });
 
     await channelSend("dupe", {
       as: "main",
@@ -246,10 +244,7 @@ describe("channel storage and forum channels", () => {
       textFile: bodyFile,
     });
 
-    const events = await readChannelEvents(
-      "file-post",
-      projectKey(projectDir),
-    );
+    const events = await readChannelEvents("file-post", projectKey(projectDir));
     expect(events.at(-1)).toMatchObject({
       kind: "thread",
       action: "comment",
@@ -341,10 +336,7 @@ describe("channel storage and forum channels", () => {
     });
     await channelTitleClear("defaults", {});
 
-    const events = await readChannelEvents(
-      "defaults",
-      projectKey(projectDir),
-    );
+    const events = await readChannelEvents("defaults", projectKey(projectDir));
     expect(events.slice(-4).map((event) => event.by)).toEqual([
       "main",
       "main",
@@ -354,9 +346,7 @@ describe("channel storage and forum channels", () => {
 
     vi.mocked(console.log).mockClear();
     await channelContextList("defaults", {});
-    expect(vi.mocked(console.log).mock.calls[0]?.[0]).toBe(
-      "raw  channel note",
-    );
+    expect(vi.mocked(console.log).mock.calls[0]?.[0]).toBe("raw  channel note");
   });
 
   it("records turn_finished when a worker emits a terminal event", async () => {
@@ -543,7 +533,10 @@ describe("channel storage and forum channels", () => {
     abort.abort();
     await watcher;
 
-    const events = await readChannelEvents("queued-turns", projectKey(projectDir));
+    const events = await readChannelEvents(
+      "queued-turns",
+      projectKey(projectDir),
+    );
     expect(events.slice(-3)).toMatchObject([
       { kind: "done", by: "worker" },
       { kind: "turn_finished", inputSeq: 2, turnId: "msg:2" },

@@ -147,17 +147,14 @@ describe("init() integration", () => {
     ).toBe(true);
   });
 
-  it("#1a writes .gitattributes with the journal merge=union rule (#415)", async () => {
+  it("#1a leaves repository Git policy untouched", async () => {
+    const ignore = path.join(tmpDir, ".gitignore");
+    fs.writeFileSync(ignore, "node_modules/\n");
     await init({ yes: true });
-
-    const gitattributes = fs.readFileSync(
-      path.join(tmpDir, ".gitattributes"),
-      "utf-8",
-    );
-    expect(gitattributes).toContain(
-      ".trellis/workspace/*/journal-*.md merge=union",
-    );
-    expect(gitattributes).not.toContain("index.md merge=union");
+    expect(fs.existsSync(path.join(tmpDir, ".gitattributes"))).toBe(false);
+    expect(fs.readFileSync(ignore, "utf8")).toBe("node_modules/\n");
+    expect(fs.existsSync(path.join(tmpDir, ".trellis/.gitignore"))).toBe(false);
+    expect(fs.readdirSync(path.join(tmpDir, PATHS.TASKS))).toEqual([]);
   });
 
   it("#1b does not print the promotional pain-point block", async () => {
@@ -919,21 +916,6 @@ describe("init() integration", () => {
     expect(second).toEqual(first);
   });
 
-  it("#7 passes developer name to init_developer script", async () => {
-    await init({ yes: true, user: "testdev" });
-
-    const calls = vi.mocked(execSync).mock.calls;
-    const match = calls.find(
-      ([cmd]) => typeof cmd === "string" && cmd.includes("init_developer.py"),
-    );
-    expect(match).toBeDefined();
-    const command = String((match as [unknown])[0]);
-    const expectedPythonCmd =
-      process.platform === "win32" ? "python" : "python3";
-    expect(command).toContain(`${expectedPythonCmd} "`);
-    expect(command).toContain('"testdev"');
-  });
-
   it("#7b throws when the selected Python command is below 3.9", async () => {
     // v0.5.7: init now tries a fallback chain (#236). Mock every candidate to
     // return the same too-old version so all candidates fail uniformly.
@@ -1011,46 +993,6 @@ describe("init() integration", () => {
     expect(Object.keys(hashes).length).toBeGreaterThan(0);
   });
 
-  it("#10 creates spec templates for backend, frontend, and guides", async () => {
-    await init({ yes: true });
-
-    const specDir = path.join(tmpDir, PATHS.SPEC);
-    expect(fs.existsSync(path.join(specDir, "backend", "index.md"))).toBe(true);
-    expect(fs.existsSync(path.join(specDir, "frontend", "index.md"))).toBe(
-      true,
-    );
-    expect(fs.existsSync(path.join(specDir, "guides", "index.md"))).toBe(true);
-  });
-
-  it("#11 backend project init skips frontend spec templates", async () => {
-    // go.mod triggers detectProjectType → "backend"
-    fs.writeFileSync(path.join(tmpDir, "go.mod"), "module example.com/app\n");
-
-    await init({ yes: true });
-
-    const specDir = path.join(tmpDir, PATHS.SPEC);
-    expect(fs.existsSync(path.join(specDir, "backend", "index.md"))).toBe(true);
-    expect(fs.existsSync(path.join(specDir, "frontend"))).toBe(false);
-    expect(fs.existsSync(path.join(specDir, "guides", "index.md"))).toBe(true);
-  });
-
-  it("#12 frontend project init skips backend spec templates", async () => {
-    // vite.config.ts triggers detectProjectType → "frontend"
-    fs.writeFileSync(
-      path.join(tmpDir, "vite.config.ts"),
-      "export default {}\n",
-    );
-
-    await init({ yes: true });
-
-    const specDir = path.join(tmpDir, PATHS.SPEC);
-    expect(fs.existsSync(path.join(specDir, "frontend", "index.md"))).toBe(
-      true,
-    );
-    expect(fs.existsSync(path.join(specDir, "backend"))).toBe(false);
-    expect(fs.existsSync(path.join(specDir, "guides", "index.md"))).toBe(true);
-  });
-
   // ===========================================================================
   // Monorepo integration tests
   // ===========================================================================
@@ -1079,47 +1021,6 @@ describe("init() integration", () => {
     }
   }
 
-  it("#13 monorepo: creates per-package spec directories", async () => {
-    // @app/web: vite.config.ts → frontend (package.json also present → still frontend)
-    // @app/api: package.json + go.mod → fullstack (both indicators present)
-    setupPnpmWorkspace(tmpDir, [
-      {
-        rel: "packages/web",
-        name: "@app/web",
-        files: { "vite.config.ts": "" },
-      },
-      { rel: "packages/api", name: "@app/api", files: { "go.mod": "" } },
-    ]);
-
-    await init({ yes: true });
-
-    const specDir = path.join(tmpDir, PATHS.SPEC);
-    // Per-package spec dirs created with sanitized names (scope stripped)
-    expect(fs.existsSync(path.join(specDir, "web"))).toBe(true);
-    expect(fs.existsSync(path.join(specDir, "api"))).toBe(true);
-
-    // web: frontend (vite.config.ts) → has frontend/, no backend/
-    expect(
-      fs.existsSync(path.join(specDir, "web", "frontend", "index.md")),
-    ).toBe(true);
-    expect(fs.existsSync(path.join(specDir, "web", "backend"))).toBe(false);
-
-    // api: fullstack (package.json + go.mod) → has both backend/ and frontend/
-    expect(
-      fs.existsSync(path.join(specDir, "api", "backend", "index.md")),
-    ).toBe(true);
-    expect(
-      fs.existsSync(path.join(specDir, "api", "frontend", "index.md")),
-    ).toBe(true);
-
-    // Guides still created (shared)
-    expect(fs.existsSync(path.join(specDir, "guides", "index.md"))).toBe(true);
-
-    // Global backend/frontend should NOT exist (monorepo mode)
-    expect(fs.existsSync(path.join(specDir, "backend"))).toBe(false);
-    expect(fs.existsSync(path.join(specDir, "frontend"))).toBe(false);
-  });
-
   it("#14 monorepo: writes packages section to config.yaml", async () => {
     setupPnpmWorkspace(tmpDir, [
       { rel: "packages/cli", name: "@trellis/cli" },
@@ -1140,51 +1041,6 @@ describe("init() integration", () => {
     expect(configContent).toContain("default_package:");
   });
 
-  it("#15 monorepo: bootstrap task references per-package spec paths", async () => {
-    setupPnpmWorkspace(tmpDir, [
-      { rel: "packages/core", name: "core" },
-      { rel: "packages/ui", name: "ui" },
-    ]);
-
-    await init({ yes: true, user: "dev" });
-
-    const taskDir = path.join(tmpDir, PATHS.TASKS, "00-bootstrap-guidelines");
-    expect(fs.existsSync(taskDir)).toBe(true);
-
-    const taskJson = JSON.parse(
-      fs.readFileSync(path.join(taskDir, "task.json"), "utf-8"),
-    );
-
-    // task.json.subtasks is canonical string[] (child task dir names);
-    // per-package checklist items now live in prd.md as markdown checkboxes.
-    expect(Array.isArray(taskJson.subtasks)).toBe(true);
-    expect(taskJson.subtasks).toEqual([]);
-
-    // Canonical shape: legacy current_phase / next_action must NOT appear
-    expect(taskJson.current_phase).toBeUndefined();
-    expect(taskJson.next_action).toBeUndefined();
-
-    // relatedFiles point to spec/<name>/
-    expect(taskJson.relatedFiles).toContain(".trellis/spec/core/");
-    expect(taskJson.relatedFiles).toContain(".trellis/spec/ui/");
-
-    // prd.md mentions packages + renders per-package checklist items
-    const prd = fs.readFileSync(path.join(taskDir, "prd.md"), "utf-8");
-    const expectedPythonCmd =
-      process.platform === "win32" ? "python" : "python3";
-    expect(prd).toContain("core");
-    expect(prd).toContain("ui");
-    expect(prd).toContain("spec/");
-    expect(prd).toContain("- [ ] Fill guidelines for core");
-    expect(prd).toContain("- [ ] Fill guidelines for ui");
-    expect(prd).toContain(
-      `${expectedPythonCmd} ./.trellis/scripts/task.py finish`,
-    );
-    expect(prd).toContain(
-      `${expectedPythonCmd} ./.trellis/scripts/task.py archive 00-bootstrap-guidelines`,
-    );
-  });
-
   it("#16 --no-monorepo skips detection even with workspace config", async () => {
     setupPnpmWorkspace(tmpDir, [{ rel: "packages/a", name: "a" }]);
 
@@ -1192,9 +1048,11 @@ describe("init() integration", () => {
 
     const specDir = path.join(tmpDir, PATHS.SPEC);
     // Single-repo spec (global backend + frontend), no per-package dirs
-    expect(fs.existsSync(path.join(specDir, "backend", "index.md"))).toBe(true);
+    expect(fs.existsSync(path.join(specDir, "backend", "index.md"))).toBe(
+      false,
+    );
     expect(fs.existsSync(path.join(specDir, "frontend", "index.md"))).toBe(
-      true,
+      false,
     );
     expect(fs.existsSync(path.join(specDir, "a"))).toBe(false);
 
@@ -1248,7 +1106,7 @@ describe("init() integration", () => {
     expect(fs.existsSync(path.join(tmpDir, DIR_NAMES.WORKFLOW))).toBe(false);
   });
 
-  it("#21 -y --registry records direct spec registry source and tracks downloaded spec files", async () => {
+  it("#21 -y --registry imports direct specs without automatic registry sync and tracks downloaded spec files", async () => {
     registryDownload.files.set("index.md", "# remote spec\n");
     vi.stubGlobal(
       "fetch",
@@ -1268,9 +1126,10 @@ describe("init() integration", () => {
       path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
       "utf-8",
     );
-    expect(config).toContain("registry:");
-    expect(config).toContain("spec:");
-    expect(config).toContain("source: gitlab:local/registry/spec");
+
+    expect(config).not.toMatch(/^registry:/m);
+
+    expect(config).not.toMatch(/^registry:/m);
 
     const hashFile = JSON.parse(
       fs.readFileSync(
@@ -1283,7 +1142,7 @@ describe("init() integration", () => {
     );
   });
 
-  it("#22 -y --registry --template records marketplace template source and tracks downloaded spec files", async () => {
+  it("#22 -y --registry --template imports marketplace specs without automatic registry sync and tracks downloaded spec files", async () => {
     registryDownload.files.set("index.md", "# golang spec\n");
     const index = JSON.stringify({
       version: 1,
@@ -1315,10 +1174,12 @@ describe("init() integration", () => {
       path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
       "utf-8",
     );
-    expect(config).toContain("registry:");
-    expect(config).toContain("spec:");
-    expect(config).toContain("source: gitlab:local/registry/marketplace");
-    expect(config).toContain("template: golang-spec");
+
+    expect(config).not.toMatch(/^registry:/m);
+
+    expect(config).not.toMatch(/^registry:/m);
+
+    expect(config).not.toMatch(/^registry:/m);
 
     const hashFile = JSON.parse(
       fs.readFileSync(
@@ -1331,8 +1192,8 @@ describe("init() integration", () => {
     );
   });
 
-  it("#23 existing project --registry --template still refreshes spec and records source", async () => {
-    await init({ yes: true, user: "alice" });
+  it("#23 existing project --registry --template explicitly imports spec without automatic registry sync", async () => {
+    await init({ yes: true });
 
     registryDownload.files.set("index.md", "# refreshed golang spec\n");
     const index = JSON.stringify({
@@ -1356,7 +1217,7 @@ describe("init() integration", () => {
 
     await init({
       yes: true,
-      user: "alice",
+
       registry: "gitlab:local/registry/marketplace",
       template: "golang-spec",
       overwrite: true,
@@ -1366,8 +1227,10 @@ describe("init() integration", () => {
       path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
       "utf-8",
     );
-    expect(config).toContain("source: gitlab:local/registry/marketplace");
-    expect(config).toContain("template: golang-spec");
+
+    expect(config).not.toMatch(/^registry:/m);
+
+    expect(config).not.toMatch(/^registry:/m);
     expect(
       fs.readFileSync(path.join(tmpDir, PATHS.SPEC, "index.md"), "utf-8"),
     ).toBe("# refreshed golang spec\n");
@@ -1487,7 +1350,7 @@ describe("init() integration", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const { confirms } = await installStatuslinePromptMock(true);
 
-    await init({ user: "alice" });
+    await init({});
 
     // Asked exactly once, defaulting to No
     expect(confirms).toHaveLength(1);
@@ -1505,7 +1368,7 @@ describe("init() integration", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const { confirms } = await installStatuslinePromptMock(false);
 
-    await init({ user: "alice" });
+    await init({});
 
     expect(confirms).toHaveLength(1);
     expect(
@@ -1533,7 +1396,7 @@ describe("init() integration", () => {
     // Would answer No if (wrongly) asked — flag must win without prompting
     const { confirms } = await installStatuslinePromptMock(false);
 
-    await init({ user: "alice", claude: true, withStatusline: true });
+    await init({ claude: true, withStatusline: true });
 
     expect(confirms).toHaveLength(0);
     expect(
@@ -1544,7 +1407,7 @@ describe("init() integration", () => {
   it("#28 reinit add-platform: statusLine confirm fires for newly added claude", async () => {
     // user is required so the bootstrap task is created — otherwise the second
     // init routes through the aborted-init recovery instead of handleReinit
-    await init({ yes: true, cursor: true, user: "alice" });
+    await init({ yes: true, cursor: true });
     expect(fs.existsSync(path.join(tmpDir, ".claude"))).toBe(false);
 
     const { confirms } = await installStatuslinePromptMock(true);
@@ -1566,7 +1429,7 @@ describe("init() integration", () => {
     fs.mkdirSync(path.dirname(nativeSettingsPath), { recursive: true });
     fs.writeFileSync(nativeSettingsPath, '{"permissions":{"allow":[]}}\n');
 
-    await init({ yes: true, codex: true, user: "alice" });
+    await init({ yes: true, codex: true });
     expect(
       fs.existsSync(
         path.join(tmpDir, ".claude", "skills", "trellis-meta", "SKILL.md"),
@@ -1586,7 +1449,7 @@ describe("init() integration", () => {
   });
 
   it("#29 reinit add-platform: no confirm when claude is already configured", async () => {
-    await init({ yes: true, claude: true, user: "alice" });
+    await init({ yes: true, claude: true });
 
     const { confirms } = await installStatuslinePromptMock(true);
     // Re-running with --claude skips the already-configured platform — the

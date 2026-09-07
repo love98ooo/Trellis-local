@@ -50,8 +50,6 @@ function makeTask(
     status: "planning",
     priority: "P2",
     createdAt: "2026-07-22",
-    assignee: "tester",
-    creator: "tester",
     subtasks: [],
     children: [],
     parent: null,

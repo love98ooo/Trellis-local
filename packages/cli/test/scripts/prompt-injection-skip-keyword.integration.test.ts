@@ -116,7 +116,7 @@ describeFn("no-trellis skip keyword (issue #427)", () => {
 
   describe("common/config.py: get_prompt_injection_config", () => {
     it("returns the default skip_keyword when config.yaml has no prompt_injection section", () => {
-      writeConfig(tmp, "session_auto_commit: true\n");
+      writeConfig(tmp, "");
       const out = runConfigProbe(
         tmp,
         "print(get_prompt_injection_config(REPO_ROOT))",
@@ -144,11 +144,8 @@ describeFn("no-trellis skip keyword (issue #427)", () => {
       expect(out.trim()).toBe("{'skip_keyword': 'off-topic'}");
     });
 
-    it('empty string skip_keyword disables the escape hatch and is preserved as-is', () => {
-      writeConfig(
-        tmp,
-        ["prompt_injection:", '  skip_keyword: ""'].join("\n"),
-      );
+    it("empty string skip_keyword disables the escape hatch and is preserved as-is", () => {
+      writeConfig(tmp, ["prompt_injection:", '  skip_keyword: ""'].join("\n"));
       const out = runConfigProbe(
         tmp,
         "print(get_prompt_injection_config(REPO_ROOT))",
@@ -261,11 +258,8 @@ describeFn("no-trellis skip keyword (issue #427)", () => {
       expect(defaultInert.stdout).not.toBe("");
     });
 
-    it("disables the escape hatch entirely with skip_keyword: \"\"", () => {
-      writeConfig(
-        tmp,
-        ["prompt_injection:", '  skip_keyword: ""'].join("\n"),
-      );
+    it('disables the escape hatch entirely with skip_keyword: ""', () => {
+      writeConfig(tmp, ["prompt_injection:", '  skip_keyword: ""'].join("\n"));
 
       const { stdout, status } = runHook(
         tmp,

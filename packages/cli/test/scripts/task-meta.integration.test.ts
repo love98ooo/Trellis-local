@@ -19,8 +19,6 @@ const TEMPLATE_SCRIPTS = path.resolve(
   "../../src/templates/trellis/scripts",
 );
 
-const DEVELOPER = "tester";
-
 function hasPython(): boolean {
   try {
     execFileSync("python3", ["--version"], { stdio: "ignore" });
@@ -35,15 +33,6 @@ function setupRepo(tmp: string): void {
   const scriptsDest = path.join(tmp, ".trellis", "scripts");
   fs.mkdirSync(scriptsDest, { recursive: true });
   fs.cpSync(TEMPLATE_SCRIPTS, scriptsDest, { recursive: true });
-
-  const r = spawnSync(
-    "python3",
-    [".trellis/scripts/init_developer.py", DEVELOPER],
-    { cwd: tmp, encoding: "utf-8" },
-  );
-  if (r.status !== 0) {
-    throw new Error(`init_developer failed: ${r.stderr}`);
-  }
 }
 
 function runTask(repo: string, ...args: string[]) {
